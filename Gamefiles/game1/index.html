@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Shooter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        // Create all required textures programmatically instead of loading external assets
+        // This ensures the game will always work regardless of network issues
+        class BootScene extends Phaser.Scene {
+            constructor() {
+                super('BootScene');
+            }
+
+            preload() {
+                // Display loading text
+                this.add.text(
+                    this.cameras.main.width / 2,
+                    this.cameras.main.height / 2,
+                    'Loading game...',
+                    { font: '24px Arial', fill: '#ffffff' }
+                ).setOrigin(0.5);
+
+                // Generate all textures programmatically
+                this.generateTextures();
+            }
+
+            generateTextures() {
+                // Background with stars
+                this.generateStarfieldTexture();
+
+                // Player ship
+                this.generatePlayerTexture();
+
+                // Enemy ship
+                this.generateEnemyTexture();
+
+                // Laser
+                this.generateLaserTexture();
+
+                // Enemy laser
+                this.generateEnemyLaserTexture();
+
+                // Power-up
+                this.generatePowerUpTexture();
+            }
+
+            generateStarfieldTexture() {
+                const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+                graphics.fillStyle(0x000000);
+                graphics.fillRect(0, 0, 800, 600);
+
+                // Add some stars
+                graphics.fillStyle(0xFFFFFF);
+                for (let i = 0; i < 200; i++) {
+                    const x = Phaser.Math.Between(0, 800);
+                    const y = Phaser.Math.Between(0, 600);
+                    const size = Phaser.Math.Between(1, 3);
+                    graphics.fillRect(x, y, size, size);
+                }
+
+                // Add some bigger stars with glow
+                graphics.fillStyle(0x00AAFF);
+                for (let i = 0; i < 40; i++) {
+                    const x = Phaser.Math.Between(0, 800);
+                    const y = Phaser.Math.Between(0, 600);
+                    const size = Phaser.Math.Between(2, 4);
+                    graphics.fillRect(x, y, size, size);
+                }
+
+                graphics.generateTexture('background', 800, 600);
+            }
+
+            generatePlayerTexture() {
+                const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+                
+                // Ship body
+                graphics.fillStyle(0x4444FF);
+                graphics.fillRect(15, 0, 20, 40);
+                
+                // Wings
+                graphics.fillStyle(0x2222AA);
+                graphics.fillTriangle(0, 30, 15, 15, 15, 40);
+                graphics.fillTriangle(50, 30, 35, 15, 35, 40);
+                
+                // Engine
+                graphics.fillStyle(0xFF8800);
+                graphics.fillRect(20, 40, 10, 5);
+                
+                graphics.generateTexture('player', 50, 45);
+            }
+
+            generateEnemyTexture() {
+                const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+                
+                // Body
+                graphics.fillStyle(0xFF0000);
+                graphics.fillRect(10, 10, 20, 20);
+                
+                // Wings
+                graphics.fillStyle(0xAA0000);
+                graphics.fillTriangle(0, 15, 10, 5, 10, 25);
+                graphics.fillTriangle(40, 15, 30, 5, 30, 25);
+                
+                // Detail
+                graphics.fillStyle(0xFF6666);
+                graphics.fillRect(15, 5, 10, 5);
+                
+                graphics.generateTexture('enemy', 40, 30);
+            }
+
+            generateLaserTexture() {
+                const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+                graphics.fillStyle(0x00FFFF);
+                graphics.fillRect(0, 0, 4, 16);
+                graphics.generateTexture('laser', 4, 16);
+            }
+
+            generateEnemyLaserTexture() {
+                const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+                graphics.fillStyle(0xFF00FF);
+                graphics.fillRect(0, 0, 4, 16);
+                graphics.generateTexture('enemyLaser', 4, 16);
+            }
+
+            generatePowerUpTexture() {
+                const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+                
+                // Outer glow
+                graphics.fillStyle(0xFFFF00, 0.5);
+                graphics.fillCircle(15, 15, 15);
+                
+                // Inner circle
+                graphics.fillStyle(0xFFAA00);
+                graphics.fillCircle(15, 15, 8);
+                
+                graphics.generateTexture('powerUp', 30, 30);
+            }
+
+            create() {
+                this.scene.start('GameScene');
+            }
+        }
+
+        class GameScene extends Phaser.Scene {
+            constructor() {
+                super('GameScene');
+            }
+
+            create() {
+                // Game variables
+                this.score = 0;
+                this.level = 1;
+                this.gameOver = false;
+                this.lastFired = 0;
+                this.fireRate = 300; // ms between shots
+                this.playerHealth = 100;
+                
+                // Set up background
+                this.background = this.add.tileSprite(0, 0, 800, 600, 'background')
+                    .setOrigin(0)
+                    .setScrollFactor(0);
+
+                // Set up groups
+                this.lasers = this.physics.add.group();
+                this.enemyLasers = this.physics.add.group();
+                this.enemies = this.physics.add.group();
+                this.powerUps = this.physics.add.group();
+                
+                // Create player
+                this.player = this.physics.add.sprite(400, 500, 'player');
+                this.player.setCollideWorldBounds(true);
+                this.player.health = this.playerHealth;
+                
+                // Set up sound effects (silent versions since we don't load them)
+                this.laserSound = { play: function() {} };
+                this.explosionSound = { play: function() {} };
+                this.powerUpSound = { play: function() {} };
+                
+                // Set up input
+                this.cursors = this.input.keyboard.createCursorKeys();
+                this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+                
+                // Add WASD keys as alternative controls
+                this.wasd = {
+                    up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+                    down: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+                    left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+                    right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D)
+                };
+
+                // Set up UI
+                this.scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '18px', fill: '#fff' });
+                this.levelText = this.add.text(16, 40, 'Level: 1', { fontSize: '18px', fill: '#fff' });
+                this.healthText = this.add.text(16, 64, 'Health: 100', { fontSize: '18px', fill: '#fff' });
+
+                // Set up collisions
+                this.physics.add.collider(this.player, this.enemies, this.playerHitEnemy, null, this);
+                this.physics.add.collider(this.lasers, this.enemies, this.laserHitEnemy, null, this);
+                this.physics.add.collider(this.player, this.enemyLasers, this.playerHitByLaser, null, this);
+                this.physics.add.overlap(this.player, this.powerUps, this.collectPowerUp, null, this);
+
+                // Spawn initial enemies
+                this.spawnEnemyWave(5);
+
+                // Spawn power-ups periodically
+                this.time.addEvent({
+                    delay: 10000,
+                    callback: this.spawnPowerUp,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                // Make enemies shoot periodically
+                this.time.addEvent({
+                    delay: 2000,
+                    callback: this.enemyShoot,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                // Instructions text
+                const instructions = "Arrow keys or WASD to move, SPACE to fire";
+                this.add.text(
+                    400, 
+                    580, 
+                    instructions, 
+                    { fontSize: '16px', fill: '#fff' }
+                ).setOrigin(0.5, 0.5);
+            }
+
+            update() {
+                if (this.gameOver) {
+                    if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+                        this.resetGame();
+                    }
+                    return;
+                }
+
+                // Scroll background
+                this.background.tilePositionY -= 0.5;
+
+                // Player movement - Arrow keys or WASD
+                if (this.cursors.left.isDown || this.wasd.left.isDown) {
+                    this.player.setVelocityX(-300);
+                } else if (this.cursors.right.isDown || this.wasd.right.isDown) {
+                    this.player.setVelocityX(300);
+                } else {
+                    this.player.setVelocityX(0);
+                }
+
+                if (this.cursors.up.isDown || this.wasd.up.isDown) {
+                    this.player.setVelocityY(-300);
+                } else if (this.cursors.down.isDown || this.wasd.down.isDown) {
+                    this.player.setVelocityY(300);
+                } else {
+                    this.player.setVelocityY(0);
+                }
+
+                // Fire laser with cooldown
+                if (this.spaceKey.isDown && this.time.now > this.lastFired) {
+                    this.fireLaser();
+                    this.lastFired = this.time.now + this.fireRate;
+                }
+
+                // Check if all enemies are defeated
+                if (this.enemies.countActive() === 0) {
+                    this.level++;
+                    this.levelText.setText('Level: ' + this.level);
+                    this.spawnEnemyWave(5 + this.level);
+                    
+                    // Every third level, spawn a boss
+                    if (this.level % 3 === 0) {
+                        this.spawnBoss();
+                    }
+                }
+
+                // Update UI
+                this.healthText.setText('Health: ' + this.player.health);
+            }
+
+            fireLaser() {
+                const laser = this.lasers.create(this.player.x, this.player.y - 20, 'laser');
+                laser.setVelocityY(-400);
+                
+                // Auto-destroy when off-screen
+                laser.checkWorldBounds = true;
+                laser.outOfBoundsKill = true;
+                
+                // Sound effect (silent in this version)
+                this.laserSound.play({ volume: 0.2 });
+            }
+
+            spawnEnemyWave(count) {
+                for (let i = 0; i < count; i++) {
+                    // Calculate position, avoiding center column
+                    let x;
+                    if (i % 2 === 0) {
+                        x = Phaser.Math.Between(50, 300);
+                    } else {
+                        x = Phaser.Math.Between(500, 750);
+                    }
+                    
+                    const y = Phaser.Math.Between(50, 200);
+                    
+                    const enemy = this.enemies.create(x, y, 'enemy');
+                    
+                    // Set enemy properties
+                    enemy.health = 2 + Math.floor(this.level / 3); // Enemies get stronger each level
+                    enemy.setVelocity(Phaser.Math.Between(-100, 100), Phaser.Math.Between(30, 60));
+                    enemy.setCollideWorldBounds(true);
+                    enemy.setBounce(1);
+                }
+            }
+
+            enemyShoot() {
+                if (this.gameOver) return;
+                
+                this.enemies.getChildren().forEach(enemy => {
+                    if (Phaser.Math.Between(0, 100) < 30) { // 30% chance to shoot
+                        const laser = this.enemyLasers.create(enemy.x, enemy.y + 20, 'enemyLaser');
+                        laser.setVelocityY(200);
+                        
+                        // Auto-destroy when off-screen
+                        laser.checkWorldBounds = true;
+                        laser.outOfBoundsKill = true;
+                    }
+                });
+            }
+
+            spawnBoss() {
+                const boss = this.enemies.create(400, 100, 'enemy');
+                boss.setScale(3);
+                boss.health = 10 + (this.level * 2); // Boss has more health
+                boss.isBoss = true;
+                boss.setVelocity(Phaser.Math.Between(-50, 50), Phaser.Math.Between(20, 30));
+                boss.setCollideWorldBounds(true);
+                boss.setBounce(1);
+                
+                // Boss specific behavior - shoot more often
+                this.time.addEvent({
+                    delay: 1000,
+                    callback: () => {
+                        if (boss.active) {
+                            for (let i = 0; i < 3; i++) {
+                                const laser = this.enemyLasers.create(
+                                    boss.x + Phaser.Math.Between(-30, 30), 
+                                    boss.y + 30, 
+                                    'enemyLaser'
+                                );
+                                laser.setVelocityY(250);
+                                laser.setVelocityX(Phaser.Math.Between(-100, 100));
+                                
+                                laser.checkWorldBounds = true;
+                                laser.outOfBoundsKill = true;
+                            }
+                        }
+                    },
+                    callbackScope: this,
+                    loop: true
+                });
+            }
+
+            spawnPowerUp() {
+                if (this.gameOver) return;
+                
+                const x = Phaser.Math.Between(50, 750);
+                const y = 0;
+                
+                const powerUp = this.powerUps.create(x, y, 'powerUp');
+                powerUp.setVelocityY(100);
+                
+                // Assign random power-up type
+                const types = ['health', 'fireRate', 'shield'];
+                powerUp.powerUpType = types[Phaser.Math.Between(0, types.length - 1)];
+                
+                // Auto-destroy when off-screen
+                powerUp.checkWorldBounds = true;
+                powerUp.outOfBoundsKill = true;
+            }
+
+            playerHitEnemy(player, enemy) {
+                // Player takes damage
+                player.health -= 20;
+                this.healthText.setText('Health: ' + player.health);
+                
+                // Play explosion sound (silent in this version)
+                this.explosionSound.play({ volume: 0.3 });
+                
+                // Flash player to indicate damage
+                this.tweens.add({
+                    targets: player,
+                    alpha: 0.5,
+                    duration: 100,
+                    yoyo: true,
+                    repeat: 2
+                });
+                
+                // Destroy enemy
+                enemy.destroy();
+                
+                // Check for game over
+                if (player.health <= 0) {
+                    this.gameOver = true;
+                    player.destroy();
+                    
+                    this.gameOverText = this.add.text(
+                        400, 
+                        300, 
+                        'GAME OVER', 
+                        { fontSize: '64px', fill: '#ff0000' }
+                    ).setOrigin(0.5);
+                    
+                    this.restartText = this.add.text(
+                        400, 
+                        360, 
+                        'Press SPACE to restart', 
+                        { fontSize: '24px', fill: '#fff' }
+                    ).setOrigin(0.5);
+                }
+            }
+
+            laserHitEnemy(laser, enemy) {
+                // Remove laser
+                laser.destroy();
+                
+                // Reduce enemy health
+                enemy.health--;
+                
+                // Flash enemy to indicate damage
+                this.tweens.add({
+                    targets: enemy,
+                    alpha: 0.5,
+                    duration: 50,
+                    yoyo: true
+                });
+                
+                if (enemy.health <= 0) {
+                    // Play explosion sound (silent in this version)
+                    this.explosionSound.play({ volume: 0.3 });
+                    
+                    // Calculate score based on enemy type
+                    const points = enemy.isBoss ? 500 : 100;
+                    this.score += points;
+                    this.scoreText.setText('Score: ' + this.score);
+                    
+                    // Create explosion effect
+                    const explosion = this.add.circle(
+                        enemy.x, 
+                        enemy.y, 
+                        enemy.isBoss ? 60 : 30, 
+                        0xff0000
+                    );
+                    
+                    this.tweens.add({
+                        targets: explosion,
+                        scale: 0,
+                        alpha: 0,
+                        duration: 300,
+                        onComplete: function() {
+                            explosion.destroy();
+                        }
+                    });
+                    
+                    // Remove enemy
+                    enemy.destroy();
+                    
+                    // Chance to spawn power-up
+                    if (Phaser.Math.Between(0, 100) < 20) { // 20% chance
+                        this.spawnPowerUp();
+                    }
+                }
+            }
+
+            playerHitByLaser(player, laser) {
+                // Remove laser
+                laser.destroy();
+                
+                // Player takes damage
+                player.health -= 10;
+                this.healthText.setText('Health: ' + player.health);
+                
+                // Flash player to indicate damage
+                this.tweens.add({
+                    targets: player,
+                    alpha: 0.5,
+                    duration: 100,
+                    yoyo: true,
+                    repeat: 1
+                });
+                
+                // Check for game over
+                if (player.health <= 0) {
+                    this.gameOver = true;
+                    player.destroy();
+                    
+                    this.gameOverText = this.add.text(
+                        400, 
+                        300, 
+                        'GAME OVER', 
+                        { fontSize: '64px', fill: '#ff0000' }
+                    ).setOrigin(0.5);
+                    
+                    this.restartText = this.add.text(
+                        400, 
+                        360, 
+                        'Press SPACE to restart', 
+                        { fontSize: '24px', fill: '#fff' }
+                    ).setOrigin(0.5);
+                }
+            }
+
+            collectPowerUp(player, powerUp) {
+                // Play power-up sound (silent in this version)
+                this.powerUpSound.play({ volume: 0.3 });
+                
+                // Apply power-up effect
+                switch (powerUp.powerUpType) {
+                    case 'health':
+                        player.health = Math.min(player.health + 20, 100);
+                        this.healthText.setText('Health: ' + player.health);
+                        break;
+                    case 'fireRate':
+                        // Temporary fire rate boost
+                        this.fireRate = 150; // Faster firing
+                        this.time.delayedCall(5000, () => {
+                            this.fireRate = 300; // Reset after 5 seconds
+                        });
+                        break;
+                    case 'shield':
+                        // Visual effect only
+                        const shield = this.add.circle(player.x, player.y, 40, 0x00FFFF, 0.3);
+                        shield.setDepth(-1);
+                        
+                        this.tweens.add({
+                            targets: shield,
+                            alpha: 0,
+                            scale: 1.5,
+                            duration: 1000,
+                            onComplete: function() {
+                                shield.destroy();
+                            }
+                        });
+                        
+                        // Add some score
+                        this.score += 50;
+                        this.scoreText.setText('Score: ' + this.score);
+                        break;
+                }
+                
+                // Create effect
+                this.tweens.add({
+                    targets: player,
+                    scale: 1.2,
+                    duration: 200,
+                    yoyo: true
+                });
+                
+                // Remove power-up
+                powerUp.destroy();
+            }
+
+            resetGame() {
+                // Reset game state
+                this.gameOver = false;
+                this.score = 0;
+                this.level = 1;
+                this.playerHealth = 100;
+                this.fireRate = 300;
+                
+                // Remove game over text
+                if (this.gameOverText) this.gameOverText.destroy();
+                if (this.restartText) this.restartText.destroy();
+                
+                // Reset UI
+                this.scoreText.setText('Score: 0');
+                this.levelText.setText('Level: 1');
+                this.healthText.setText('Health: 100');
+                
+                // Clear all entities
+                this.enemies.clear(true, true);
+                this.lasers.clear(true, true);
+                this.enemyLasers.clear(true, true);
+                this.powerUps.clear(true, true);
+                
+                // Create new player
+                this.player = this.physics.add.sprite(400, 500, 'player');
+                this.player.setCollideWorldBounds(true);
+                this.player.health = this.playerHealth;
+                
+                // Set up collisions again
+                this.physics.add.collider(this.player, this.enemies, this.playerHitEnemy, null, this);
+                this.physics.add.collider(this.lasers, this.enemies, this.laserHitEnemy, null, this);
+                this.physics.add.collider(this.player, this.enemyLasers, this.playerHitByLaser, null, this);
+                this.physics.add.overlap(this.player, this.powerUps, this.collectPowerUp, null, this);
+                
+                // Spawn initial enemies
+                this.spawnEnemyWave(5);
+            }
+        }
+
+        // Game configuration
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            backgroundColor: '#000000',
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 0 },
+                    debug: false
+                }
+            },
+            scene: [BootScene, GameScene]
+        };
+
+        // Create game instance
+        const game = new Phaser.Game(config);
+    </script>
+</body>
+</html

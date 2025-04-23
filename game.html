@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Space Shooter</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js"></script>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                background-color: #000;
+            }
+            canvas {
+                display: block;
+            }
+        </style>
+    </head>
+    <body>
+        <script>
+        class BootScene extends Phaser.Scene {
+    constructor() {
+        super('Boot');
+    }
+
+    preload() {
+        // Display loading text
+        this.add.text(
+            this.cameras.main.width / 2,
+            this.cameras.main.height / 2,
+            'Loading game...',
+            { font: '24px Arial', fill: '#ffffff' }
+        ).setOrigin(0.5);
+
+        // Generate all textures programmatically
+        this.generateTextures();
+    }
+
+    generateTextures() {
+        this.generateBackgroundTexture();
+        this.generatePaddleTexture();
+        this.generateBallTexture();
+        this.generateTableTexture();
+    }
+    generateBackgroundTexture() {
+        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+        graphics.fillStyle(0x000000);
+        graphics.fillRect(0, 0, 800, 600);
+
+        graphics.generateTexture('background', 800, 600);
+    }
+
+    generatePaddleTexture() {
+        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+        graphics.fillStyle(0xffffff);
+        graphics.fillRect(0, 0, 20, 100);
+        graphics.generateTexture('paddle', 20, 100);
+    }
+
+    generateBallTexture() {
+        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+        graphics.fillStyle(0xffffff);
+        graphics.fillCircle(10, 10, 10);
+        graphics.generateTexture('ball', 20, 20);
+    }
+
+    generateTableTexture() {
+        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+        graphics.fillStyle(0x008000);
+        graphics.fillRect(0, 0, 800, 20);
+        graphics.generateTexture('table', 800, 20);
+    }
+
+    create() {
+        this.scene.start('GameScene');
+    }
+}
+        class GameScene extends Phaser.Scene {
+constructor() {
+    super({ key: 'GameScene' });
+    this.config = {};
+}
+init(config) {
+    this.config = config;
+}
+create() {
+    this.add.image(400, 300, 'background');
+    this.playerPaddle = this.physics.add.sprite(50, 300, 'paddle');
+    this.aiPaddle = this.physics.add.sprite(750, 300, 'paddle');
+    this.ball = this.physics.add.sprite(400, 300, 'ball');
+    this.table = this.add.image(400,300, 'table');
+
+    this.playerScore = 0;
+    this.aiScore = 0;
+
+    this.playerScoreText = this.add.text(10, 10, '0', { fontSize: '32px', fill: '#000' });
+    this.aiScoreText = this.add.text(750, 10, '0', { fontSize: '32px', fill: '#000' });
+
+    this.cursors = this.input.keyboard.createCursorKeys();
+
+    this.physics.add.collider(this.playerPaddle, this.ball, this.handlePaddleBallCollision, null, this);
+    this.physics.add.collider(this.aiPaddle, this.ball, this.handlePaddleBallCollision, null, this);
+
+    this.ball.setVelocity(200, 200);   
+}
+
+movePlayerPaddle() {
+    if (this.cursors.up.isDown) {
+        this.playerPaddle.y -= 10;
+    } else if (this.cursors.down.isDown) {
+        this.playerPaddle.y += 10;
+    }
+}
+
+moveAIPaddle() {
+    if (this.ball.y < this.aiPaddle.y) {
+        this.aiPaddle.y -= 5;
+    } else if (this.ball.y > this.aiPaddle.y) {
+        this.aiPaddle.y += 5;
+    }
+}
+
+updateBallPosition() { 
+  if (this.ball.x < 0 || this.ball.x > 800) {        this.resetBall();    }
+    if (this.ball.y < 0 || this.ball.y > 600) {
+        this.ball.setVelocity(this.ball.body.velocity.x, -this.ball.body.velocity.y);
+    }
+}
+
+handlePaddleBallCollision(paddle, ball) {    ball.setVelocity(-ball.body.velocity.x * 1.05, ball.body.velocity.y * 1.05);}
+
+updateScore(playerScored) {
+    if (playerScored) {
+        this.playerScore++;
+        this.playerScoreText.setText(this.playerScore);
+    } else {
+        this.aiScore++;
+        this.aiScoreText.setText(this.aiScore);
+    }
+}
+
+checkWinCondition() {
+    if (this.playerScore >= 10) {
+        this.endGame(true);
+    } else if (this.aiScore >= 10) {
+        this.endGame(false);
+    }
+}
+resetBall() {
+    this.ball.setPosition(400, 300);
+    const direction = Math.random() < 0.5 ? -1 : 1;
+    this.ball.setVelocity(200 * direction, 200);
+    if(this.ball.x < 0) { this.updateScore(false); } 
+        else { this.updateScore(true); }
+}
+
+adjustBallSpeed(factor) {
+    this.ball.setVelocity(this.ball.body.velocity.x * factor, this.ball.body.velocity.y * factor);
+}
+
+displayScore() {
+    // Score is already displayed, this function can update position if needed.
+}
+startGame() {}
+pauseGame() {}
+resumeGame() {}
+endGame(playerWon) {
+    if (playerWon) {
+      this.add.text(200, 200, 'You Won!', { fontSize: '64px', fill: '#000'});
+    } else {
+        this.add.text(200, 200, 'You Lost!', { fontSize: '64px', fill: '#000'});
+    }
+    this.scene.pause();     
+}
+update() {
+    this.movePlayerPaddle();
+    this.moveAIPaddle();
+    this.updateBallPosition();
+    this.checkWinCondition();
+}
+}
+        const game = new Phaser.Game({
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+    scene: [BootScene, GameScene],  // Include BootScene
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 0 }
+        }
+    }
+});
