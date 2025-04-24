@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fruit Slash Frenzy</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #333;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 150 }, // Further reduced gravity for slower fall
+                    debug: false
+                }
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        
+        // Game variables
+        let score = 0;
+        let lives = 3; // Added lives counter
+        let scoreText;
+        let livesText; // Added lives text
+        let gameOver = false;
+        let gameOverText;
+        let instructionsText;
+        let titleText;
+        let finalScoreText; // New variable to track the final score text
+        let restartText; // New variable to track the restart text
+        let fruitTypes = ['apple', 'banana', 'orange', 'watermelon'];
+        let clouds = []; // Array to store cloud objects
+        
+        function preload() {
+            // No preloading needed as we're drawing our shapes
+        }
+        
+        function create() {
+            // Create background
+            const bg = this.add.graphics();
+            bg.fillGradientStyle(0x87CEEB, 0x87CEEB, 0x4682B4, 0x4682B4, 1);
+            bg.fillRect(0, 0, 800, 600);
+            
+            // Create moving clouds
+            clouds = [];
+            createCloud(this, 100, 100, 0xFFFFFF, 0.5);
+            createCloud(this, 300, 150, 0xFFFFFF, 0.7);
+            createCloud(this, 600, 80, 0xFFFFFF, 0.3);
+            createCloud(this, 450, 200, 0xFFFFFF, 0.6);
+            createCloud(this, 150, 250, 0xFFFFFF, 0.4);
+            
+            // Score text
+            scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#FFF' });
+            
+            // Lives text
+            livesText = this.add.text(650, 16, 'Lives: 3', { fontSize: '32px', fill: '#FFF' });
+            
+            // Title
+            titleText = this.add.text(400, 50, 'Fruit Slash Frenzy', {
+                fontSize: '40px',
+                fill: '#FFF',
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
+            
+            // Instructions
+            instructionsText = this.add.text(400, 100, 'Tap to slice fruit. Avoid bombs!', {
+                fontSize: '20px',
+                fill: '#FFF'
+            }).setOrigin(0.5);
+            
+            // Create fruits group
+            this.fruits = this.physics.add.group();
+            
+            // Create bombs group
+            this.bombs = this.physics.add.group();
+            
+            // Spawn fruits timer - slower spawning
+            this.time.addEvent({
+                delay: 1500, // Increased from 1000 to 1500
+                callback: spawnFruit,
+                callbackScope: this,
+                loop: true
+            });
+            
+            // Spawn bombs timer - slower spawning
+            this.time.addEvent({
+                delay: 4000, // Increased from 3000 to 4000
+                callback: spawnBomb,
+                callbackScope: this,
+                loop: true
+            });
+            
+            // Enable input
+            this.input.on('pointerdown', slashObjects, this);
+            
+            // Game over text (hidden initially)
+            gameOverText = this.add.text(400, 300, 'GAME OVER', {
+                fontSize: '64px',
+                fill: '#FF0000',
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
+            gameOverText.setVisible(false);
+            
+            // Initialize these as null
+            finalScoreText = null;
+            restartText = null;
+        }
+        
+        function update() {
+            // Move clouds
+            for (let i = 0; i < clouds.length; i++) {
+                clouds[i].x += clouds[i].speed;
+                
+                // Wrap clouds around screen
+                if (clouds[i].x > 900) {
+                    clouds[i].x = -100;
+                }
+                
+                // Update cloud graphics position
+                clouds[i].graphics.x = clouds[i].x;
+                clouds[i].graphics.y = clouds[i].y;
+            }
+            
+            // Check if fruits hit the ground
+            this.fruits.getChildren().forEach(fruit => {
+                if (fruit.y > 600 && !gameOver) {
+                    // Lose a life instead of immediately ending game
+                    loseLife.call(this);
+                    fruit.destroy();
+                }
+            });
+        }
+        
+        function createCloud(scene, x, y, color, speed) {
+            const cloudGraphics = scene.add.graphics();
+            cloudGraphics.fillStyle(color, 0.7);
+            cloudGraphics.fillCircle(0, 0, 30);
+            cloudGraphics.fillCircle(25, 0, 25);
+            cloudGraphics.fillCircle(45, 0, 20);
+            cloudGraphics.fillCircle(-20, 0, 20);
+            
+            // Store cloud data
+            let cloud = {
+                x: x,
+                y: y,
+                speed: speed,
+                graphics: cloudGraphics
+            };
+            
+            // Set initial position
+            cloudGraphics.x = x;
+            cloudGraphics.y = y;
+            
+            // Add to clouds array
+            clouds.push(cloud);
+        }
+        
+        function spawnFruit() {
+            if (gameOver) return;
+            
+            const x = Phaser.Math.Between(100, 700);
+            const fruitType = Phaser.Utils.Array.GetRandom(fruitTypes);
+            const fruit = this.fruits.create(x, 0, '');
+            
+            // Set fruit properties
+            fruit.type = fruitType;
+            fruit.setVelocity(Phaser.Math.Between(-80, 80), Phaser.Math.Between(100, 180)); // Even slower velocity
+            fruit.setAngularVelocity(Phaser.Math.Between(-80, 80));
+            fruit.setBounce(0.8);
+            fruit.setCircle(40);
+            
+            // Draw fruit based on type
+            drawFruit(this, fruit, fruitType);
+        }
+        
+        function spawnBomb() {
+            if (gameOver) return;
+            
+            const x = Phaser.Math.Between(100, 700);
+            const bomb = this.bombs.create(x, 0, '');
+            
+            // Draw bomb
+            const bombGraphics = this.add.graphics();
+            bombGraphics.fillStyle(0x000000, 1);
+            bombGraphics.fillCircle(0, 0, 25);
+            
+            // Add fuse
+            bombGraphics.lineStyle(3, 0x333333);
+            bombGraphics.lineBetween(0, -25, 10, -40);
+            
+            // Add spark
+            bombGraphics.fillStyle(0xFF0000, 1);
+            bombGraphics.fillCircle(10, -40, 5);
+            
+            // Create texture from graphics
+            bombGraphics.generateTexture('bomb_' + bomb.id, 50, 50);
+            bomb.setTexture('bomb_' + bomb.id);
+            
+            // Set bomb properties
+            bomb.setVelocity(Phaser.Math.Between(-80, 80), Phaser.Math.Between(100, 150)); // Even slower bombs
+            bomb.setAngularVelocity(Phaser.Math.Between(-80, 80));
+            bomb.setBounce(0.8);
+            bomb.setCircle(25);
+        }
+        
+        function drawFruit(scene, fruit, type) {
+            const fruitGraphics = scene.add.graphics();
+            
+            switch (type) {
+                case 'apple':
+                    // Red apple
+                    fruitGraphics.fillStyle(0xFF0000, 1);
+                    fruitGraphics.fillCircle(0, 0, 40);
+                    // Stem
+                    fruitGraphics.fillStyle(0x654321, 1);
+                    fruitGraphics.fillRect(-5, -45, 10, 15);
+                    break;
+                    
+                case 'banana':
+                    // Yellow banana
+                    fruitGraphics.fillStyle(0xFFFF00, 1);
+                    fruitGraphics.fillEllipse(0, 0, 60, 30);
+                    break;
+                    
+                case 'orange':
+                    // Orange
+                    fruitGraphics.fillStyle(0xFFA500, 1);
+                    fruitGraphics.fillCircle(0, 0, 40);
+                    break;
+                    
+                case 'watermelon':
+                    // Green outside
+                    fruitGraphics.fillStyle(0x2ECC71, 1);
+                    fruitGraphics.fillCircle(0, 0, 45);
+                    // Red inside
+                    fruitGraphics.fillStyle(0xFF6B6B, 1);
+                    fruitGraphics.fillCircle(0, 0, 38);
+                    // Black seeds
+                    fruitGraphics.fillStyle(0x000000, 1);
+                    fruitGraphics.fillCircle(-15, -8, 3);
+                    fruitGraphics.fillCircle(15, -8, 3);
+                    fruitGraphics.fillCircle(0, 8, 3);
+                    fruitGraphics.fillCircle(-8, 0, 3);
+                    fruitGraphics.fillCircle(8, 0, 3);
+                    break;
+            }
+            
+            // Create texture from graphics
+            fruitGraphics.generateTexture('fruit_' + fruit.type + '_' + fruit.id, 100, 100);
+            fruit.setTexture('fruit_' + fruit.type + '_' + fruit.id);
+        }
+        
+        function slashObjects(pointer) {
+            if (gameOver) {
+                // Restart game on click after game over
+                resetGame.call(this);
+                return;
+            }
+            
+            let sliced = false;
+            
+            // Check for fruit slashes
+            this.fruits.getChildren().forEach(fruit => {
+                if (Phaser.Geom.Rectangle.ContainsPoint(fruit.getBounds(), pointer)) {
+                    // Slice the fruit
+                    sliceFruit.call(this, fruit);
+                    sliced = true;
+                }
+            });
+            
+            // Check for bomb slashes
+            this.bombs.getChildren().forEach(bomb => {
+                if (Phaser.Geom.Rectangle.ContainsPoint(bomb.getBounds(), pointer)) {
+                    // Hit a bomb
+                    hitBomb.call(this, bomb);
+                    sliced = true;
+                }
+            });
+            
+            // Create a slash effect at pointer position
+            if (sliced) {
+                createSlashEffect.call(this, pointer.x, pointer.y);
+            }
+        }
+        
+        function sliceFruit(fruit) {
+            // Increase score
+            score += 10;
+            scoreText.setText('Score: ' + score);
+            
+            // Create explosion effect
+            const particles = this.add.particles('');
+            
+            // Determine color based on fruit type
+            let color;
+            switch (fruit.type) {
+                case 'apple': color = 0xFF0000; break;
+                case 'banana': color = 0xFFFF00; break;
+                case 'orange': color = 0xFFA500; break;
+                case 'watermelon': color = 0x2ECC71; break;
+                default: color = 0xFFFFFF;
+            }
+            
+            // Create particle effect
+            const emitter = particles.createEmitter({
+                speed: { min: 100, max: 200 },
+                scale: { start: 0.6, end: 0 },
+                lifespan: 300,
+                quantity: 15,
+                tint: color
+            });
+            
+            emitter.explode(30, fruit.x, fruit.y);
+            
+            // Remove the fruit
+            fruit.destroy();
+        }
+        
+        function hitBomb(bomb) {
+            // Lose a life when hitting a bomb
+            loseLife.call(this);
+            
+            // Create explosion effect
+            const particles = this.add.particles('');
+            const emitter = particles.createEmitter({
+                speed: { min: 100, max: 200 },
+                scale: { start: 0.5, end: 0 },
+                lifespan: 500,
+                quantity: 20,
+                tint: 0xFF0000
+            });
+            
+            emitter.explode(30, bomb.x, bomb.y);
+            
+            // Remove the bomb
+            bomb.destroy();
+        }
+        
+        function loseLife() {
+            // Decrease lives
+            lives--;
+            livesText.setText('Lives: ' + lives);
+            
+            // Flash the lives text red
+            this.tweens.add({
+                targets: livesText,
+                alpha: 0.2,
+                duration: 200,
+                yoyo: true,
+                repeat: 1,
+                onComplete: function() {
+                    livesText.alpha = 1;
+                }
+            });
+            
+            // End game if no more lives
+            if (lives <= 0) {
+                endGame.call(this);
+            }
+        }
+        
+        function createSlashEffect(x, y) {
+            const slash = this.add.graphics();
+            slash.lineStyle(3, 0xFFFFFF, 1);
+            
+            // Random slash angle
+            const angle = Phaser.Math.Between(0, 360);
+            const length = 50;
+            
+            // Calculate end points
+            const x1 = x - Math.cos(angle * Math.PI / 180) * length;
+            const y1 = y - Math.sin(angle * Math.PI / 180) * length;
+            const x2 = x + Math.cos(angle * Math.PI / 180) * length;
+            const y2 = y + Math.sin(angle * Math.PI / 180) * length;
+            
+            slash.lineBetween(x1, y1, x2, y2);
+            
+            // Fade out and destroy
+            this.tweens.add({
+                targets: slash,
+                alpha: 0,
+                duration: 200,
+                onComplete: () => {
+                    slash.destroy();
+                }
+            });
+        }
+        
+        function endGame() {
+            gameOver = true;
+            
+            // Show game over text
+            gameOverText.setVisible(true);
+            
+            // Add restart instructions
+            restartText = this.add.text(400, 370, 'Click to restart', {
+                fontSize: '24px',
+                fill: '#FFF'
+            }).setOrigin(0.5);
+            
+            // Show final score
+            finalScoreText = this.add.text(400, 420, 'Final Score: ' + score, {
+                fontSize: '32px',
+                fill: '#FFF'
+            }).setOrigin(0.5);
+            
+            // Stop spawning and freeze existing objects
+            this.fruits.getChildren().forEach(fruit => {
+                fruit.setVelocity(0, 0);
+                fruit.setAngularVelocity(0);
+                fruit.body.allowGravity = false;
+            });
+            
+            this.bombs.getChildren().forEach(bomb => {
+                bomb.setVelocity(0, 0);
+                bomb.setAngularVelocity(0);
+                bomb.body.allowGravity = false;
+            });
+        }
+        
+        function resetGame() {
+            // Reset game state
+            gameOver = false;
+            score = 0;
+            lives = 3;
+            scoreText.setText('Score: 0');
+            livesText.setText('Lives: 3');
+            gameOverText.setVisible(false);
+            
+            // Clear all fruits and bombs
+            this.fruits.clear(true, true);
+            this.bombs.clear(true, true);
+            
+            // Destroy final score and restart text
+            if (finalScoreText) {
+                finalScoreText.destroy();
+                finalScoreText = null;
+            }
+            
+            if (restartText) {
+                restartText.destroy();
+                restartText = null;
+            }
+        }
+    </script>
+</body>
+</html>

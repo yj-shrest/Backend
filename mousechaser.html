@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mouse and Cheese</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #333;
+        }
+        canvas {
+            border: 2px solid #555;
+        }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            color: white;
+            background-color: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">Use arrow keys to move the mouse and collect cheese. Avoid the cat!</div>
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 300 },
+                    debug: false
+                }
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+
+        let player;
+        let platforms;
+        let cheese;
+        let cat;
+        let cursors;
+        let score = 0;
+        let scoreText;
+        let gameOver = false;
+        let gameOverText;
+        let victoryText;
+        let restartButton;
+        let currentScene;
+
+        function preload() {
+            // No preloaded assets needed as we're drawing everything
+        }
+
+        function create() {
+            currentScene = this;
+            gameOver = false;
+            score = 0;
+
+            // Background
+            this.add.rectangle(400, 300, 800, 600, 0xE1C16E); // Wooden table color
+
+            // Create wooden table platforms with grain detail
+            platforms = this.physics.add.staticGroup();
+
+            // Main table surface
+            createTablePlatform(this, 400, 568, 800, 32);
+
+            // Table ledges
+            createTablePlatform(this, 600, 400, 300, 20);
+            createTablePlatform(this, 50, 300, 200, 20);
+            createTablePlatform(this, 750, 220, 200, 20);
+            createTablePlatform(this, 400, 150, 250, 20);
+
+            // Player - Mouse
+            player = this.physics.add.sprite(100, 450, 'mouse');
+            createMouse(this, player);
+
+            player.setBounce(0.2);
+            player.setCollideWorldBounds(true);
+
+            // Cat enemy
+            cat = this.physics.add.sprite(600, 500, 'cat');
+            createCat(this, cat);
+            cat.setCollideWorldBounds(true);
+            cat.setBounce(0.2);
+            cat.setVelocityX(100);
+            cat.allowGravity = true;
+
+            // Cheese items
+            cheese = this.physics.add.group();
+
+            // Create 10 cheese pieces
+            for(let i = 0; i < 10; i++) {
+                const x = Phaser.Math.Between(50, 750);
+                const y = Phaser.Math.Between(0, 450);
+                const cheeseItem = cheese.create(x, y, 'cheese');
+                createCheese(this, cheeseItem);
+                cheeseItem.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
+            }
+
+            // Score
+            scoreText = this.add.text(16, 16, 'Cheese: 0/10', {
+                fontSize: '24px',
+                fill: '#000',
+                fontFamily: 'Arial'
+            });
+
+            // Game Over text
+            gameOverText = this.add.text(400, 250, 'Game Over', {
+                fontSize: '64px',
+                fill: '#FF0000',
+                fontFamily: 'Arial'
+            });
+            gameOverText.setOrigin(0.5);
+            gameOverText.visible = false;
+
+            // Victory text
+            victoryText = this.add.text(400, 250, 'You Win!', {
+                fontSize: '64px',
+                fill: '#00FF00',
+                fontFamily: 'Arial'
+            });
+            victoryText.setOrigin(0.5);
+            victoryText.visible = false;
+
+            // Restart button
+            restartButton = this.add.text(400, 350, 'Restart Game', {
+                fontSize: '32px',
+                fill: '#FFF',
+                fontFamily: 'Arial',
+                backgroundColor: '#000',
+                padding: { x: 20, y: 10 }
+            });
+            restartButton.setOrigin(0.5);
+            restartButton.setInteractive({ useHandCursor: true });
+            restartButton.on('pointerdown', restartGame);
+            restartButton.visible = false;
+
+            // Input
+            cursors = this.input.keyboard.createCursorKeys();
+
+            // Add restart key (R key)
+            this.input.keyboard.on('keydown-R', restartGame);
+
+            // Colliders
+            this.physics.add.collider(player, platforms);
+            this.physics.add.collider(cheese, platforms);
+            this.physics.add.collider(cat, platforms);
+
+            // Overlap detections
+            this.physics.add.overlap(player, cheese, collectCheese, null, this);
+            this.physics.add.overlap(player, cat, hitCat, null, this);
+        }
+
+        function update() {
+            if (gameOver) {
+                return;
+            }
+
+            // Cat movement (back and forth)
+            if (cat.body.velocity.x > 0 && cat.x > 750) {
+                cat.setVelocityX(-100);
+                cat.scaleX = -1; // Flip the cat to face left
+            } else if (cat.body.velocity.x < 0 && cat.x < 50) {
+                cat.setVelocityX(100);
+                cat.scaleX = 1; // Flip the cat to face right
+            }
+
+            // Player movement
+            if (cursors.left.isDown) {
+                player.setVelocityX(-160);
+                player.scaleX = -1; // Flip the mouse to face left
+            } else if (cursors.right.isDown) {
+                player.setVelocityX(160);
+                player.scaleX = 1; // Flip the mouse to face right
+            } else {
+                player.setVelocityX(0);
+            }
+
+            if (cursors.up.isDown && player.body.touching.down) {
+                player.setVelocityY(-350);
+            }
+        }
+
+        function restartGame() {
+            // Reset game state
+            gameOver = false;
+
+            // Hide end game texts and buttons
+            gameOverText.visible = false;
+            victoryText.visible = false;
+            restartButton.visible = false;
+
+            // Remove tint from player
+            if (player) {
+                player.clearTint();
+            }
+
+            // Restart the current scene
+            currentScene.scene.restart();
+        }
+
+        function createCat(scene, sprite) {
+            // Clear any existing graphics
+            if (sprite.body) {
+                sprite.body.setSize(50, 40);
+                sprite.body.setOffset(0, 10);
+            }
+
+            // Create cat graphics
+            const catGraphics = scene.add.graphics();
+
+            // Cat body
+            catGraphics.fillStyle(0x808080, 1); // Gray
+            catGraphics.fillCircle(25, 25, 25); // Head
+            catGraphics.fillEllipse(25, 40, 30, 20); // Body
+
+            // Cat face
+            catGraphics.fillStyle(0xFFFFFF, 1); // White
+            catGraphics.fillCircle(15, 20, 5); // Left eye
+            catGraphics.fillCircle(35, 20, 5); // Right eye
+
+            // Cat pupils
+            catGraphics.fillStyle(0x000000, 1); // Black
+            catGraphics.fillCircle(15, 20, 2); // Left pupil
+            catGraphics.fillCircle(35, 20, 2); // Right pupil
+
+            // Cat ears
+            catGraphics.fillStyle(0x808080, 1); // Gray
+            catGraphics.fillTriangle(10, 10, 5, -5, 20, 5); // Left ear
+            catGraphics.fillTriangle(40, 10, 45, -5, 30, 5); // Right ear
+
+            // Convert to texture
+            const catTexture = catGraphics.generateTexture('cat_texture', 50, 50);
+            catGraphics.destroy();
+
+            sprite.setTexture('cat_texture');
+        }
+
+        function createMouse(scene, sprite) {
+            // Set collision box
+            if (sprite.body) {
+                sprite.body.setSize(30, 20);
+                sprite.body.setOffset(5, 10);
+            }
+
+            // Create mouse graphics
+            const mouseGraphics = scene.add.graphics();
+
+            // Mouse body
+            mouseGraphics.fillStyle(0xCCCCCC, 1); // Light gray
+            mouseGraphics.fillCircle(20, 20, 15); // Head
+            mouseGraphics.fillEllipse(20, 30, 20, 15); // Body
+
+            // Mouse ears
+            mouseGraphics.fillStyle(0xFFCCCC, 1); // Pink
+            mouseGraphics.fillCircle(10, 10, 6); // Left ear
+            mouseGraphics.fillCircle(30, 10, 6); // Right ear
+
+            // Mouse eyes
+            mouseGraphics.fillStyle(0x000000, 1); // Black
+            mouseGraphics.fillCircle(15, 18, 2); // Left eye
+            mouseGraphics.fillCircle(25, 18, 2); // Right eye
+
+            // Mouse nose
+            mouseGraphics.fillStyle(0xFF9999, 1); // Pink nose
+            mouseGraphics.fillCircle(20, 22, 3);
+
+            // Mouse tail
+            mouseGraphics.lineStyle(2, 0xCCCCCC);
+            mouseGraphics.beginPath();
+            mouseGraphics.moveTo(5, 30);
+            mouseGraphics.lineTo(-5, 20);
+            mouseGraphics.stroke();
+
+            // Convert to texture
+            const mouseTexture = mouseGraphics.generateTexture('mouse_texture', 40, 40);
+            mouseGraphics.destroy();
+
+            sprite.setTexture('mouse_texture');
+        }
+
+        function createCheese(scene, sprite) {
+            // Set collision box
+            if (sprite.body) {
+                sprite.body.setSize(20, 15);
+            }
+
+            // Create cheese graphics
+            const cheeseGraphics = scene.add.graphics();
+
+            // Cheese shape
+            cheeseGraphics.fillStyle(0xFFD700, 1); // Golden/yellow
+            cheeseGraphics.fillTriangle(0, 20, 20, 20, 10, 5); // Wedge shape
+
+            // Cheese holes
+            cheeseGraphics.fillStyle(0xFFE650, 1); // Slightly lighter yellow
+            cheeseGraphics.fillCircle(5, 15, 2); // Hole 1
+            cheeseGraphics.fillCircle(15, 12, 2); // Hole 2
+
+            // Convert to texture
+            const cheeseTexture = cheeseGraphics.generateTexture('cheese_texture', 20, 20);
+            cheeseGraphics.destroy();
+
+            sprite.setTexture('cheese_texture');
+        }
+
+        function createTablePlatform(scene, x, y, width, height) {
+            // Create table platform with wood grain effect
+            const platform = scene.add.graphics();
+
+            // Base color
+            platform.fillStyle(0xA0522D, 1); // Brown
+            platform.fillRect(0, 0, width, height);
+
+            // Wood grain lines
+            platform.lineStyle(1, 0x8B4513, 0.5); // Darker brown, semi-transparent
+            for (let i = 0; i < width; i += 10) {
+                platform.beginPath();
+                platform.moveTo(i, 0);
+                platform.lineTo(i, height);
+                platform.stroke();
+            }
+
+            // Generate texture and add to the platforms group
+            const texture = platform.generateTexture('platform_' + x + '_' + y, width, height);
+            platform.destroy();
+
+            const platformSprite = platforms.create(x, y, 'platform_' + x + '_' + y);
+            return platformSprite;
+        }
+
+        function collectCheese(player, cheeseItem) {
+            cheeseItem.disableBody(true, true);
+
+            score += 1;
+            scoreText.setText('Cheese: ' + score + '/10');
+
+            if (cheese.countActive(true) === 0) {
+                victoryText.visible = true;
+                restartButton.visible = true;
+                this.physics.pause();
+                gameOver = true;
+
+                // Display restart instructions
+                this.add.text(400, 400, 'Press R to restart', {
+                    fontSize: '24px',
+                    fill: '#FFF',
+                    fontFamily: 'Arial'
+                }).setOrigin(0.5);
+            }
+        }
+
+        function hitCat(player, cat) {
+            this.physics.pause();
+
+            player.setTint(0xff0000);
+
+            gameOver = true;
+            gameOverText.visible = true;
+            restartButton.visible = true;
+
+            // Display restart instructions
+            this.add.text(400, 400, 'Press R to restart', {
+                fontSize: '24px',
+                fill: '#FFF',
+                fontFamily: 'Arial'
+            }).setOrigin(0.5);
+        }
+    </script>
+</body>
+</html>

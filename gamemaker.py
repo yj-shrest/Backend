@@ -45,6 +45,8 @@ def generate_game_code(config):
                     Functions that use the Phaser scene context (this) must be correctly scoped:
                     • Either define them inside the scene object, or
                     • Call them using .call(this) or .bind(this) to ensure correct context.
+                    Only provide the code and nothing else. Do not add any other text or explanation. 
+                    The game code should be a single HTML file that can be run in a web browser.
                     Donot add music or sound assets to the game"""
                     }
                 ]
@@ -76,7 +78,9 @@ def update_game(feedback,code):
                 "content": [
                     {
                         "type": "text",
-                        "text": f"""update the game code with the following feedback: {feedback}. The game code is {code}."""
+                        "text": f"""update the game code with the following feedback: {feedback}. The game code is {code}.
+                        Only provide the code and nothing else. Do not add any other text or explanation.
+                        The game code should be a single HTML file that can be run in a web browser."""
                     }
                 ]
             }

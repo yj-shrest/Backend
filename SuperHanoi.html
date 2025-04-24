@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower of Hanoi</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+        
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            font-family: 'Poppins', sans-serif;
+            color: white;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            letter-spacing: 1px;
+        }
+        
+        #game-container {
+            margin-bottom: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        #instruction {
+            max-width: 600px;
+            text-align: center;
+            margin-bottom: 20px;
+            background-color: rgba(255, 255, 255, 0.15);
+            padding: 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tower of Hanoi</h1>
+    <div id="instruction">
+        Move all the disks from the leftmost peg to the rightmost peg. You can only move one disk at a time.
+        You can only place a smaller disk on top of a larger disk.
+    </div>
+    <div id="game-container"></div>
+
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            parent: 'game-container',
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    debug: false
+                }
+            },
+            scene: {
+                create: create,
+                update: update
+            }
+        };
+
+        // Game variables
+        const NUM_PEGS = 3;
+        const NUM_DISKS = 3;
+        const DISK_COLORS = [0xFF5252, 0x42A5F5, 0x66BB6A];
+        const DISK_HEIGHT = 30;
+        
+        let disks = [];
+        let pegs = [];
+        let pegStacks = [[], [], []];
+        let selectedDisk = null;
+        let draggingDisk = null;
+        let originalPosition = null;
+        let moves = 0;
+        let movesText;
+        let completionText;
+        let minMoves;
+
+        const game = new Phaser.Game(config);
+
+        function create() {
+            // Set the minimum number of moves (2^n - 1)
+            minMoves = Math.pow(2, NUM_DISKS) - 1;
+            
+            // Create a nice background
+            createBackground(this);
+            
+            // Create game board
+            const boardWidth = 750;
+            const boardHeight = 350;
+            const board = this.add.rectangle(400, 400, boardWidth, boardHeight, 0x34495e).setOrigin(0.5, 1);
+            board.setStrokeStyle(4, 0x2c3e50);
+            
+            // Title text with shadow
+            const titleStyle = {
+                fontSize: '38px',
+                fontFamily: 'Poppins',
+                fill: '#fff',
+                fontStyle: 'bold',
+                stroke: '#2c3e50',
+                strokeThickness: 4
+            };
+            this.add.text(400, 50, 'Tower of Hanoi', titleStyle).setOrigin(0.5);
+
+            // Add instructions
+            const instructStyle = {
+                fontSize: '18px',
+                fontFamily: 'Poppins',
+                fill: '#fff',
+                fontStyle: 'bold'
+            };
+            this.add.text(400, 90, 'Drag and drop disks to solve the puzzle', instructStyle).setOrigin(0.5);
+
+            // Create pegs
+            const pegWidth = 20;
+            const pegHeight = 200;
+            const pegSpacing = 250;
+            const pegY = 400;
+            
+            for (let i = 0; i < NUM_PEGS; i++) {
+                const pegX = 200 + i * pegSpacing;
+                
+                // Draw fancy base of the peg
+                const baseWidth = 150;
+                const baseHeight = 25;
+                const base = this.add.rectangle(pegX, pegY + 2, baseWidth, baseHeight, 0x795548).setOrigin(0.5, 0);
+                base.setStrokeStyle(3, 0x5d4037);
+                
+                // Add shadow effect
+                this.add.rectangle(pegX + 5, pegY + 5, baseWidth, baseHeight, 0x000000, 0.2).setOrigin(0.5, 0);
+                
+                // Draw the peg with gradient effect
+                const peg = this.add.rectangle(pegX, pegY, pegWidth, pegHeight, 0x8d6e63).setOrigin(0.5, 1);
+                peg.setStrokeStyle(2, 0x5d4037);
+                peg.pegIndex = i;
+                
+                pegs.push(peg);
+                
+                // Add peg labels with a circular background
+                const circleRadius = 25;
+                const circle = this.add.circle(pegX, pegY + 35, circleRadius, 0xecf0f1);
+                circle.setStrokeStyle(3, 0xbdc3c7);
+                
+                this.add.text(pegX, pegY + 35, String.fromCharCode(65 + i), {
+                    fontSize: '24px',
+                    fontFamily: 'Poppins',
+                    fill: '#2c3e50',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+            }
+            
+            // Create disks with gradients and shadows
+            const maxDiskWidth = 140;
+            const diskGradients = [0xff7675, 0x74b9ff, 0x55efc4];
+            
+            for (let i = 0; i < NUM_DISKS; i++) {
+                const diskWidth = maxDiskWidth - (i * 35);
+                
+                // Create disk shadow
+                const shadow = this.add.rectangle(
+                    pegs[0].x + 4,
+                    pegY - (i + 1) * DISK_HEIGHT + 4,
+                    diskWidth,
+                    DISK_HEIGHT,
+                    0x000000,
+                    0.3
+                );
+                
+                // Create the actual disk
+                const disk = this.add.rectangle(
+                    pegs[0].x,
+                    pegY - (i + 1) * DISK_HEIGHT,
+                    diskWidth,
+                    DISK_HEIGHT,
+                    DISK_COLORS[i]
+                );
+                
+                // Add rounded corners effect with stroke
+                disk.setStrokeStyle(3, 0x000000, 0.4);
+                disk.diskIndex = NUM_DISKS - 1 - i;
+                disk.size = diskWidth;
+                disk.shadow = shadow;
+                
+                // Make disk draggable
+                disk.setInteractive({ draggable: true });
+                
+                // Set up drag events
+                this.input.setDraggable(disk);
+                
+                disks.push(disk);
+                pegStacks[0].push(disk);
+            }
+
+            // Setup drag events
+            this.input.on('dragstart', function(pointer, gameObject) {
+                // Check if the disk is on top of its peg
+                const fromPeg = findPegIndexForDisk(gameObject);
+                if (fromPeg !== -1 && pegStacks[fromPeg][pegStacks[fromPeg].length - 1] === gameObject) {
+                    draggingDisk = gameObject;
+                    originalPosition = { x: gameObject.x, y: gameObject.y };
+                    gameObject.setStrokeStyle(4, 0xf1c40f);
+                    gameObject.setDepth(100);
+                    
+                    // Move shadow with disk
+                    gameObject.shadow.setDepth(99);
+                    gameObject.shadow.setVisible(false);
+                } else {
+                    // Don't allow dragging if not the top disk
+                    return false;
+                }
+            });
+
+            this.input.on('drag', function(pointer, gameObject, dragX, dragY) {
+                if (draggingDisk === gameObject) {
+                    gameObject.x = dragX;
+                    gameObject.y = dragY;
+                }
+            });
+
+            this.input.on('dragend', function(pointer, gameObject) {
+                if (draggingDisk === gameObject) {
+                    const targetPeg = findTargetPeg(gameObject);
+                    
+                    if (targetPeg !== -1) {
+                        // Find which peg the disk is currently on
+                        const fromPeg = findPegIndexForDisk(gameObject);
+
+                        if (fromPeg !== targetPeg) {
+                            // Check if the move is valid
+                            if (isValidMove(fromPeg, targetPeg)) {
+                                // Valid move - update stacks and position
+                                const disk = pegStacks[fromPeg].pop();
+                                pegStacks[targetPeg].push(disk);
+                                
+                                // Update disk position
+                                updateDiskPosition(disk, targetPeg);
+                                
+                                // Increment move counter
+                                moves++;
+                                movesText.setText(`Moves: ${moves} | Minimum: ${minMoves}`);
+                                
+                                // Check for win condition
+                                checkWinCondition();
+                            } else {
+                                // Invalid move - return to original position
+                                returnToOriginalPosition(gameObject);
+                            }
+                        } else {
+                            // Dropped on same peg - return to original position
+                            returnToOriginalPosition(gameObject);
+                        }
+                    } else {
+                        // Dropped on invalid location - return to original position
+                        returnToOriginalPosition(gameObject);
+                    }
+
+                    // Reset selection
+                    gameObject.setStrokeStyle(3, 0x000000, 0.4);
+                    gameObject.setDepth(0);
+                    gameObject.shadow.setDepth(0);
+                    gameObject.shadow.setVisible(true);
+                    draggingDisk = null;
+                    originalPosition = null;
+                }
+            });
+            
+            // Add moves counter with elegant design
+            const moveCounterBg = this.add.rectangle(400, 150, 300, 40, 0x2c3e50, 0.8);
+            moveCounterBg.setStrokeStyle(2, 0x34495e);
+            moveCounterBg.setAlpha(0.8);
+            
+            movesText = this.add.text(400, 150, `Moves: 0 | Minimum: ${minMoves}`, {
+                fontSize: '22px',
+                fontFamily: 'Poppins',
+                fill: '#ecf0f1'
+            }).setOrigin(0.5);
+            
+            // Add stylish reset button
+            const resetButton = this.add.rectangle(400, 520, 160, 50, 0x3498db, 0.9);
+            resetButton.setInteractive({ useHandCursor: true });
+            resetButton.setStrokeStyle(3, 0x2980b9);
+            
+            // Add button hover effect
+            resetButton.on('pointerover', function() {
+                resetButton.fillColor = 0x2980b9;
+                resetButton.setScale(1.05);
+            });
+            
+            resetButton.on('pointerout', function() {
+                resetButton.fillColor = 0x3498db;
+                resetButton.setScale(1);
+            });
+            
+            // Add button press effect
+            resetButton.on('pointerdown', function() {
+                resetButton.setScale(0.95);
+            });
+            
+            resetButton.on('pointerup', function() {
+                resetButton.setScale(1);
+                resetGame.call(this);
+            }, this);
+            
+            this.add.text(400, 520, 'Reset Game', {
+                fontSize: '20px',
+                fontFamily: 'Poppins',
+                fill: '#fff',
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
+            
+            // Create completion message with animation
+            const completionBg = this.add.rectangle(400, 220, 400, 80, 0x2ecc71, 0.9);
+            completionBg.setStrokeStyle(4, 0x27ae60);
+            completionBg.setVisible(false);
+            
+            completionText = this.add.text(400, 220, 'Puzzle Solved!', {
+                fontSize: '32px',
+                fontFamily: 'Poppins',
+                fontStyle: 'bold',
+                fill: '#fff',
+                stroke: '#27ae60',
+                strokeThickness: 1
+            }).setOrigin(0.5);
+            completionText.setVisible(false);
+            
+            // Store completion elements
+            this.completionElements = [completionBg, completionText];
+        }
+        
+        function createBackground(scene) {
+            // Add a subtle gradient background to the game scene
+            const gradient = scene.add.graphics();
+            gradient.fillGradientStyle(0x3498db, 0x3498db, 0x2c3e50, 0x2c3e50, 1);
+            gradient.fillRect(0, 0, 800, 600);
+            
+            // Add some decorative elements
+            for (let i = 0; i < 20; i++) {
+                const x = Phaser.Math.Between(0, 800);
+                const y = Phaser.Math.Between(0, 600);
+                const size = Phaser.Math.Between(2, 5);
+                const circle = scene.add.circle(x, y, size, 0xffffff, 0.3);
+            }
+        }
+        
+        function update() {
+            // Game logic updates if needed
+        }
+
+        function findPegIndexForDisk(disk) {
+            for (let i = 0; i < NUM_PEGS; i++) {
+                const stackIndex = pegStacks[i].indexOf(disk);
+                if (stackIndex !== -1) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        function findTargetPeg(disk) {
+            // Find which peg the disk is closest to
+            let closestPeg = -1;
+            let closestDistance = Number.MAX_VALUE;
+            
+            for (let i = 0; i < pegs.length; i++) {
+                const distance = Phaser.Math.Distance.Between(disk.x, disk.y, pegs[i].x, pegs[i].y);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestPeg = i;
+                }
+            }
+            
+            // Only consider it a valid target if it's close enough (within 100 pixels)
+            return closestDistance < 100 ? closestPeg : -1;
+        }
+
+        function isValidMove(fromPeg, toPeg) {
+            const movingDisk = pegStacks[fromPeg][pegStacks[fromPeg].length - 1];
+            
+            // Check if target peg is empty
+            if (pegStacks[toPeg].length === 0) {
+                return true;
+            }
+            
+            // Get the top disk on the target peg
+            const topDisk = pegStacks[toPeg][pegStacks[toPeg].length - 1];
+            
+            // Smaller disk index means larger disk (we changed the diskIndex assignment)
+            return movingDisk.size < topDisk.size;
+        }
+
+        function updateDiskPosition(disk, pegIndex) {
+            disk.x = pegs[pegIndex].x;
+            disk.y = pegs[0].y - pegStacks[pegIndex].length * DISK_HEIGHT;
+            
+            // Move the shadow with the disk
+            disk.shadow.x = disk.x + 4;
+            disk.shadow.y = disk.y + 4;
+        }
+
+        function returnToOriginalPosition(disk) {
+            if (originalPosition) {
+                disk.x = originalPosition.x;
+                disk.y = originalPosition.y;
+                
+                // Update shadow position
+                disk.shadow.x = disk.x + 4;
+                disk.shadow.y = disk.y + 4;
+            } else {
+                // Find the peg this disk is on and reposition it correctly
+                const pegIndex = findPegIndexForDisk(disk);
+                if (pegIndex !== -1) {
+                    const position = pegStacks[pegIndex].indexOf(disk);
+                    if (position !== -1) {
+                        disk.x = pegs[pegIndex].x;
+                        disk.y = pegs[0].y - (position + 1) * DISK_HEIGHT;
+                        
+                        // Update shadow position
+                        disk.shadow.x = disk.x + 4;
+                        disk.shadow.y = disk.y + 4;
+                    }
+                }
+            }
+        }
+        
+        function checkWinCondition() {
+            // Win if all disks are on the rightmost peg
+            if (pegStacks[NUM_PEGS - 1].length === NUM_DISKS) {
+                // Show completion message with animation
+                const scene = game.scene.scenes[0];
+                
+                scene.completionElements.forEach(element => {
+                    element.setVisible(true);
+                    element.setAlpha(0);
+                    scene.tweens.add({
+                        targets: element,
+                        alpha: 1,
+                        y: 220,
+                        duration: 800,
+                        ease: 'Bounce.Out'
+                    });
+                });
+                
+                // Add confetti effect
+                createConfettiEffect(scene);
+            }
+        }
+        
+        function createConfettiEffect(scene) {
+            const colors = [0xff7675, 0x74b9ff, 0x55efc4, 0xfdcb6e, 0xe84393];
+            
+            for (let i = 0; i < 100; i++) {
+                setTimeout(() => {
+                    const x = Phaser.Math.Between(200, 600);
+                    const color = Phaser.Utils.Array.GetRandom(colors);
+                    const size = Phaser.Math.Between(5, 15);
+                    
+                    const confetti = scene.add.rectangle(x, -20, size, size, color);
+                    
+                    scene.tweens.add({
+                        targets: confetti,
+                        y: 650,
+                        x: x + Phaser.Math.Between(-100, 100),
+                        angle: Phaser.Math.Between(0, 360),
+                        alpha: { start: 1, to: 0.7 },
+                        scale: { start: 1, to: 0.5 },
+                        duration: Phaser.Math.Between(2000, 4000),
+                        ease: 'Sine.InOut',
+                        onComplete: () => confetti.destroy()
+                    });
+                }, i * 20);
+            }
+        }
+        
+        function resetGame() {
+            // Reset variables
+            moves = 0;
+            movesText.setText(`Moves: 0 | Minimum: ${minMoves}`);
+            
+            // Hide completion message
+            const scene = game.scene.scenes[0];
+            if (scene.completionElements) {
+                scene.completionElements.forEach(element => {
+                    element.setVisible(false);
+                });
+            }
+            
+            // Clear all pegs
+            pegStacks = [[], [], []];
+            
+            // Reset disk positions
+            for (let i = 0; i < NUM_DISKS; i++) {
+                // We need to add disks in the correct order (largest on bottom)
+                const diskIndex = NUM_DISKS - 1 - i;
+                disks[diskIndex].x = pegs[0].x;
+                disks[diskIndex].y = pegs[0].y - (i + 1) * DISK_HEIGHT;
+                disks[diskIndex].setStrokeStyle(3, 0x000000, 0.4);
+                disks[diskIndex].setDepth(0);
+                
+                // Position shadow
+                disks[diskIndex].shadow.x = disks[diskIndex].x + 4;
+                disks[diskIndex].shadow.y = disks[diskIndex].y + 4;
+                disks[diskIndex].shadow.setVisible(true);
+                
+                pegStacks[0].push(disks[diskIndex]);
+            }
+            
+            // Clear any selected disk
+            draggingDisk = null;
+            originalPosition = null;
+        }
+    </script>
+</body>
+</html>

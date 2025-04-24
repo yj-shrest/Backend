@@ -46,6 +46,8 @@ def create():
     data = request.get_json()
     config = data["gameConfig"]
     html = generate_game_code(config)
+    with open("game.html", "w") as file:
+        file.write(html)
     return jsonify({"html": html})
 
 @app.route('/update_game', methods=['POST'])
@@ -54,6 +56,8 @@ def update():
     feedback = data["feedbackPrompt"]
     html = data["gameHtml"]
     updated = update_game(feedback,html)
+    with open("game.html", "w") as file:
+        file.write(updated)
     return jsonify({"html": updated})
 # def update_game():
 #     data = request.get_json()
