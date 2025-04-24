@@ -1,17 +1,24 @@
-from atoma_sdk import AtomaSDK
-import os
-API_KEY = "pQDhafMOzpQAQAe2tQFLbYDFbpbeAh"
+import anthropic
 
-with AtomaSDK(
-    bearer_auth=API_KEY,
-) as atoma_sdk:
-    
-    completion = atoma_sdk.chat.create(
-      model="Infermatic/Llama-3.3-70B-Instruct-FP8-Dynamic",
-      messages=[
-        {"role": "developer", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Hello!"}
-      ]
+# Replace this with your actual API key, or set it as an environment variable
+
+client = anthropic.Anthropic()
+
+try:
+    response = client.messages.create(
+        model="claude-3-7-sonnet-20250219",  # Make sure this model is available in your account
+        max_tokens=50,
+        messages=[
+            {"role": "user", "content": "Hello Claude, are you working?"}
+        ]
     )
+    print("✅ API Key is valid. Claude responded:")
+    print(response.content[0].text)
 
-    print(completion.choices[0].message)
+except anthropic.AuthenticationError as e:
+    print("❌ Invalid API key. Authentication failed.")
+    print(e)
+
+except Exception as e:
+    print("⚠️ An error occurred:")
+    print(e)    

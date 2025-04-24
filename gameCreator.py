@@ -168,27 +168,77 @@ def game_logic_generator(sprite_textures,logic_functions, config):
     parsed_data = json.loads(response.text)
     return parsed_data
 
-def create_game(config):
-    plan = plan_generator(config)
+def validate_generated_code(code, required_functions):
+    """Validate that all required functions are implemented in the generated code."""
+    # Basic validation that all required functions exist
+    missing_functions = []
+    for func in required_functions:
+        if func not in code:
+            missing_functions.append(func)
+    
+    if missing_functions:
+        raise ValueError(f"Missing required functions: {', '.join(missing_functions)}")
+    
+    # Check for common errors
+    common_errors = [
+        "TODO", 
+        "//", 
+        "/* */", 
+        "function()", 
+        "undefined"
+    ]
+    
+    for error in common_errors:
+        if error in code:
+            raise ValueError(f"Detected potential incomplete code: {error}")
+    
+    return True
 
-    sprite_textures = plan["sprite_textures"]
-    logic_functions = plan["logic_functions"]
-    sprite_textures = ', '.join(sprite_textures)
+def create_game(config):
+    # Generate the game plan
+    plan = plan_generator(config)
+    
+    # Validate the plan
+    if not plan["sprite_textures"] or not plan["logic_functions"]:
+        raise ValueError("Game plan missing required elements")
+    
+    # Generate boot scene with sprites
+    sprite_textures = ', '.join(plan["sprite_textures"])
     bootscenecode = sprite_generator(sprite_textures)
-    sprite_names = bootscenecode['textures']
-    sprite_names = ', '.join(sprite_names)
-    game_logic = game_logic_generator(sprite_names, logic_functions, config)["code"]
+    
+    # Validate bootscene code
+    if not bootscenecode["code"] or not bootscenecode["textures"]:
+        raise ValueError("Boot scene generation failed")
+    
+    # Make sure all required textures are included
+    missing_textures = [texture for texture in plan["sprite_textures"] 
+                       if texture not in ' '.join(bootscenecode["textures"])]
+    if missing_textures:
+        print(f"Warning: Some textures may be missing: {missing_textures}")
+    
+    # Generate game logic
+    sprite_names = ', '.join(bootscenecode['textures'])
+    game_logic_result = game_logic_generator(sprite_names, plan["logic_functions"], config)
+    game_logic = game_logic_result["code"]
+    
+    # Validate game logic
+    try:
+        validate_generated_code(game_logic, plan["logic_functions"])
+    except ValueError as e:
+        print(f"Warning: Game logic validation issue: {e}")
+        # Here you could implement retry logic
+    
+    # Combine and format the game
     game_logic = game_logic.replace("scene: [GameScene]", "scene: [BootScene, GameScene]")
     game_logic = game_logic.replace("scene: GameScene", "scene: [BootScene, GameScene]")
-
-    # print(bootscenecode['code'])
-    # print(game_logic['code'])
+    
+    # Create the final HTML
     html = f"""<!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Space Shooter</title>
+        <title>{config['title']}</title>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js"></script>
         <style>
             body {{
@@ -213,9 +263,12 @@ def create_game(config):
     </body>
     </html>
     """
-    with open("temp.html", "w") as file:
+    
+    # Save the game
+    with open(f"{config['title'].replace(' ', '_').lower()}.html", "w") as file:
         file.write(html)
-    print("Game created successfully!")
+    
+    print(f"Game '{config['title']}' created successfully!")
     return html
 
 if __name__ == "__main__":

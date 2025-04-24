@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Space Shooter</title>
+        <title>Flappy Rocket</title>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js"></script>
         <style>
             body {
@@ -23,64 +23,515 @@
     <body>
         <script>
         class BootScene extends Phaser.Scene {
-    constructor() {
-        super('Boot');
+            constructor() {
+                super('BootScene');
+            }
+
+            preload() {
+                // Display loading text
+                this.add.text(
+                    this.cameras.main.width / 2,
+                    this.cameras.main.height / 2,
+                    'Loading game...', { font: '24px Arial', fill: '#ffffff' }
+                ).setOrigin(0.5);
+
+                // Generate all textures programmatically
+                this.generateTextures();
+
+                 // Generate explosion animation frames (optional but good for the explosion sprite)
+                 this.generateExplosionTexture();
+            }
+
+            generateTextures() {
+                // Background with stars
+                this.generateStarfieldTexture();
+
+                // Player ship
+                this.generatePlayerTexture();
+
+                // Asteroid
+                this.generateAsteroidTexture();
+            }
+
+            generateStarfieldTexture() {
+                const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+                graphics.fillStyle(0x000000);
+                graphics.fillRect(0, 0, 800, 600);
+
+                // Add some stars
+                graphics.fillStyle(0xFFFFFF);
+                for (let i = 0; i < 200; i++) {
+                    const x = Phaser.Math.Between(0, 800);
+                    const y = Phaser.Math.Between(0, 600);
+                    const size = Phaser.Math.Between(1, 3);
+                    graphics.fillRect(x, y, size, size);
+                }
+
+                // Add some bigger stars with glow
+                graphics.fillStyle(0x00AAFF);
+                for (let i = 0; i < 40; i++) {
+                    const x = Phaser.Math.Between(0, 800);
+                    const y = Phaser.Math.Between(0, 600);
+                    const size = Phaser.Math.Between(2, 4);
+                    graphics.fillRect(x, y, size, size);
+                }
+
+                graphics.generateTexture('starfield', 800, 600);
+                graphics.destroy(); // Clean up graphics object
+            }
+
+            generatePlayerTexture() {
+                const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+
+                // Ship body
+                graphics.fillStyle(0x4444FF); // Blue body
+                graphics.fillPoints([
+                    { x: 25, y: 0 }, // Nose cone top
+                    { x: 45, y: 25 }, // Right wing tip
+                    { x: 35, y: 25 }, // Right wing inner
+                    { x: 35, y: 40 }, // Right engine bottom
+                    { x: 15, y: 40 }, // Left engine bottom
+                    { x: 15, y: 25 }, // Left wing inner
+                    { x: 5, y: 25 },  // Left wing tip
+                ], true); // Close the shape
+
+                // Cockpit window
+                graphics.fillStyle(0xAAFFFF); // Light cyan
+                graphics.fillEllipse(25, 15, 15, 10);
+
+                // Engine glow (small)
+                graphics.fillStyle(0xFF8800); // Orange
+                graphics.fillRect(20, 40, 10, 5);
+
+
+                graphics.generateTexture('spaceship', 50, 45);
+                graphics.destroy();
+            }
+
+            generateAsteroidTexture() {
+                const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+                const radius = 25;
+                const centerX = 30;
+                const centerY = 30;
+
+                // Asteroid body - irregular shape
+                graphics.fillStyle(0x8B4513); // Brownish
+                graphics.beginPath();
+                graphics.moveTo(centerX + radius, centerY);
+                for (let i = 1; i <= 10; i++) {
+                    const angle = (i / 10) * Math.PI * 2;
+                    const randomRadius = radius * Phaser.Math.FloatBetween(0.8, 1.2);
+                    graphics.lineTo(
+                        centerX + randomRadius * Math.cos(angle),
+                        centerY + randomRadius * Math.sin(angle)
+                    );
+                }
+                graphics.closePath();
+                graphics.fillPath();
+
+                // Craters
+                graphics.fillStyle(0x654321); // Darker brown
+                graphics.fillCircle(centerX + radius * 0.4, centerY - radius * 0.3, radius * 0.2);
+                graphics.fillCircle(centerX - radius * 0.3, centerY + radius * 0.5, radius * 0.15);
+
+                graphics.generateTexture('asteroid', 60, 60); // Texture size
+                graphics.destroy();
+            }
+
+            generateExplosionTexture() {
+    // Create a texture sheet for the explosion animation
+    const frameSize = 64;
+    const graphics = this.make.graphics({ add: false });
+    const textureKeys = []; // Store the generated texture keys
+
+    for (let i = 0; i < 16; i++) { // 16 frames
+        const progress = i / 15; // 0 to 1
+        const textureKey = `explosion_frame_${i}`; // Define the key for this frame
+        textureKeys.push(textureKey); // Add key to our list
+
+        // Clear for next frame
+        graphics.clear();
+        graphics.fillStyle(0xFF8C00, 1); // Dark Orange
+
+        // Outer expanding circle
+        const outerRadius = frameSize * 0.5 * progress * 1.2;
+        if (outerRadius > 1) { // Avoid drawing tiny/invisible circles
+             graphics.fillCircle(frameSize / 2, frameSize / 2, outerRadius);
+        }
+
+
+        // Inner brighter circle
+        graphics.fillStyle(0xFFFF00, 1); // Yellow
+        const innerRadius = frameSize * 0.4 * progress;
+         if (progress < 0.8 && innerRadius > 1) { // Fade out inner circle & avoid tiny circles
+            graphics.fillCircle(frameSize / 2, frameSize / 2, innerRadius);
+         }
+
+
+        // Sparks (simple version)
+        if (progress > 0.2 && progress < 0.9) {
+            graphics.fillStyle(0xFFFFFF, 0.8); // White sparks
+             for(let j=0; j<5; j++){
+                 const angle = Math.random() * Math.PI * 2;
+                 const dist = outerRadius * (0.5 + Math.random() * 0.5);
+                 const sparkX = frameSize / 2 + Math.cos(angle) * dist;
+                 const sparkY = frameSize / 2 + Math.sin(angle) * dist;
+                 graphics.fillCircle(sparkX, sparkY, Math.max(1, frameSize*0.03)); // Ensure minimum spark size
+             }
+        }
+
+        // Generate frame texture ONLY if it doesn't already exist
+        // (Prevents warnings/errors on scene restart if BootScene somehow runs again)
+        if (!this.textures.exists(textureKey)) {
+            graphics.generateTexture(textureKey, frameSize, frameSize);
+        }
     }
+    graphics.destroy(); // Clean up graphics object
 
-    preload() {
-        // Display loading text
-        this.add.text(
-            this.cameras.main.width / 2,
-            this.cameras.main.height / 2,
-            'Loading game...',
-            { font: '24px Arial', fill: '#ffffff' }
-        ).setOrigin(0.5);
+    // --- CORRECTED Animation Creation ---
+    // Create the array of frame objects using the generated texture keys
+    const explosionFrames = textureKeys.map(key => ({ key: key }));
 
-        // Generate all textures programmatically
-        this.generateTextures();
-    }
-
-    generateTextures() {
-        this.generateBackgroundTexture();
-        this.generatePaddleTexture();
-        this.generateBallTexture();
-        this.generateTableTexture();
-    }
-    generateBackgroundTexture() {
-        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
-        graphics.fillStyle(0x000000);
-        graphics.fillRect(0, 0, 800, 600);
-
-        graphics.generateTexture('background', 800, 600);
-    }
-
-    generatePaddleTexture() {
-        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
-        graphics.fillStyle(0xffffff);
-        graphics.fillRect(0, 0, 20, 100);
-        graphics.generateTexture('paddle', 20, 100);
-    }
-
-    generateBallTexture() {
-        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
-        graphics.fillStyle(0xffffff);
-        graphics.fillCircle(10, 10, 10);
-        graphics.generateTexture('ball', 20, 20);
-    }
-
-    generateTableTexture() {
-        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
-        graphics.fillStyle(0x008000);
-        graphics.fillRect(0, 0, 800, 20);
-        graphics.generateTexture('table', 800, 20);
-    }
-
-    create() {
-        this.scene.start('GameScene');
+    // Create the animation only once
+    if (!this.anims.exists('explode')) {
+        this.anims.create({
+            key: 'explode',
+            frames: explosionFrames, // Use the correctly generated array of texture keys
+            frameRate: 24,
+            hideOnComplete: true // Automatically hide the sprite when done
+        });
+        console.log("Created 'explode' animation with keys:", textureKeys); // Debug log
+    } else {
+        console.log("'explode' animation already exists."); // Debug log
     }
 }
-        {"GameScene": "class GameScene extends Phaser.Scene {\nconstructor() {\n    super({ key: 'GameScene' });\n    this.config = {};\n}\ninit(config) {\n    this.config = config;\n}\ncreate() {\n    this.add.image(400, 300, 'background');\n    this.playerPaddle = this.physics.add.sprite(50, 300, 'paddle');\n    this.aiPaddle = this.physics.add.sprite(750, 300, 'paddle');\n    this.ball = this.physics.add.sprite(400, 300, 'ball');\n    this.table = this.add.image(400,300, 'table');\n\n    this.playerScore = 0;\n    this.aiScore = 0;\n\n    this.playerScoreText = this.add.text(10, 10, '0', { fontSize: '32px', fill: '#000' });\n    this.aiScoreText = this.add.text(750, 10, '0', { fontSize: '32px', fill: '#000' });\n\n    this.cursors = this.input.keyboard.createCursorKeys();\n\n    this.physics.add.collider(this.playerPaddle, this.ball, this.handlePaddleBallCollision, null, this);\n    this.physics.add.collider(this.aiPaddle, this.ball, this.handlePaddleBallCollision, null, this);\n\n    this.ball.setVelocity(200, 200);   \n}\n\nmovePlayerPaddle() {\n    if (this.cursors.up.isDown) {\n        this.playerPaddle.y -= 10;\n    } else if (this.cursors.down.isDown) {\n        this.playerPaddle.y += 10;\n    }\n}\n\nmoveAIPaddle() {\n    if (this.ball.y < this.aiPaddle.y) {\n        this.aiPaddle.y -= 5;\n    } else if (this.ball.y > this.aiPaddle.y) {\n        this.aiPaddle.y += 5;\n    }\n}\n\nupdateBallPosition() { \n  if (this.ball.x < 0 || this.ball.x > 800) {        this.resetBall();    }\n    if (this.ball.y < 0 || this.ball.y > 600) {\n        this.ball.setVelocity(this.ball.body.velocity.x, -this.ball.body.velocity.y);\n    }\n}\n\nhandlePaddleBallCollision(paddle, ball) {    ball.setVelocity(-ball.body.velocity.x * 1.05, ball.body.velocity.y * 1.05);}\n\nupdateScore(playerScored) {\n    if (playerScored) {\n        this.playerScore++;\n        this.playerScoreText.setText(this.playerScore);\n    } else {\n        this.aiScore++;\n        this.aiScoreText.setText(this.aiScore);\n    }\n}\n\ncheckWinCondition() {\n    if (this.playerScore >= 10) {\n        this.endGame(true);\n    } else if (this.aiScore >= 10) {\n        this.endGame(false);\n    }\n}\nresetBall() {\n    this.ball.setPosition(400, 300);\n    const direction = Math.random() < 0.5 ? -1 : 1;\n    this.ball.setVelocity(200 * direction, 200);\n    if(this.ball.x < 0) { this.updateScore(false); } \n        else { this.updateScore(true); }\n}\n\nadjustBallSpeed(factor) {\n    this.ball.setVelocity(this.ball.body.velocity.x * factor, this.ball.body.velocity.y * factor);\n}\n\ndisplayScore() {\n    // Score is already displayed, this function can update position if needed.\n}\nstartGame() {}\npauseGame() {}\nresumeGame() {}\nendGame(playerWon) {\n    if (playerWon) {\n      this.add.text(200, 200, 'You Won!', { fontSize: '64px', fill: '#000'});\n    } else {\n        this.add.text(200, 200, 'You Lost!', { fontSize: '64px', fill: '#000'});\n    }\n    this.scene.pause();     \n}\nupdate() {\n    this.movePlayerPaddle();\n    this.moveAIPaddle();\n    this.updateBallPosition();\n    this.checkWinCondition();\n}\n}", "config": {"description": "A classic game of ping pong where the player controls a paddle to hit a ball back and forth against an AI opponent. The goal is to score points by making the opponent miss the ball.", "genre": "Sports", "instructions": "Use the controls to move your paddle up and down. Hit the ball back towards the opponent's side of the table. Score points when the opponent fails to return the ball.", "required_assets": ["Paddle", "Ball", "Table"], "title": "Simple Ping Pong"}, "gameInstance": "const game = new Phaser.Game({\n    type: Phaser.AUTO,\n    width: 800,\n    height: 600,\n    scene: [BootScene, GameScene],  // Include BootScene\n    physics: {\n        default: 'arcade',\n        arcade: {\n            gravity: { y: 0 }\n        }\n    }\n});"}
+
+
+            create() {
+                 // Start the game scene after textures are generated
+                this.scene.start('GameScene');
+            }
+        }
+
+        class GameScene extends Phaser.Scene {
+            constructor() {
+                super({ key: 'GameScene' });
+                // Initialize variables that *don't* need resetting every game here
+                // Or leave it empty if init() handles everything
+            }
+
+            // Use init to reset state before each game run (including the first)
+            init() {
+                this.player = null;
+                this.asteroids = [];
+                this.starfield = null;
+                this.background = null; // Add this
+                this.score = 0;
+                this.scoreText = null;
+                this.gameOverFlag = false;
+                this.gameSpeed = 1;
+                this.asteroidSpawnRate = 1500; // Reset spawn rate
+                this.asteroidTimer = null;
+                this.explosion = null; // To hold the explosion sprite
+                console.log("GameScene init: State reset"); // For debugging
+            }
+
+            // Preload is usually for loading assets, but BootScene handles it.
+            // Keep it empty or remove if not needed.
+            preload() {
+                // Assets are preloaded and generated in BootScene
+            }
+
+            create() {
+                console.log("GameScene create: Setting up scene"); // For debugging
+                this.createBackground(); // Creates this.background
+                // this.createStarfield(); // Redundant if createBackground uses 'starfield'
+                this.createPlayer();
+                this.displayScore();
+
+                // Ensure physics is running (it might be paused after a restart)
+                this.physics.resume();
+
+                // Setup asteroid timer using the reset spawn rate from init()
+                this.asteroidTimer = this.time.addEvent({
+                    delay: this.asteroidSpawnRate,
+                    callback: this.createAsteroid,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                // Add input listeners (they are removed in gameOver)
+                this.input.on('pointerdown', this.playerFlap, this);
+                this.input.keyboard.on('keydown-SPACE', this.playerFlap, this);
+            }
+
+            createBackground() {
+                // Use the generated starfield texture
+                 this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'starfield').setOrigin(0, 0);
+                 // Add a second layer for parallax effect (optional but nice)
+                this.starfield = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'starfield').setOrigin(0, 0);
+                this.starfield.setTileScale(0.5); // Make distant stars smaller
+                this.starfield.setAlpha(0.7); // Make distant stars dimmer
+            }
+
+            // Removed createStarfield as createBackground handles it better now with two layers
+
+            moveStarfield() {
+                // Move background layers at different speeds for parallax
+                this.background.tilePositionX += this.gameSpeed * 0.2;
+                this.starfield.tilePositionX += this.gameSpeed * 0.5;
+            }
+
+            createPlayer() {
+                this.player = this.physics.add.sprite(100, this.scale.height / 2, 'spaceship');
+                this.player.setOrigin(0.5);
+                this.player.setScale(0.75);
+                this.player.setCollideWorldBounds(true); // Keep player on screen vertically
+                this.player.body.onWorldBounds = true; // Trigger event on hitting bounds
+                this.player.setBodySize(this.player.width * 0.7, this.player.height * 0.8); // Adjust collision box if needed
+
+                // Reset gravity (important after restart)
+                this.player.body.setAllowGravity(true);
+                this.player.body.setGravityY(300);
+
+                // Listen for world bounds collision
+                 this.physics.world.on('worldbounds', (body) => {
+                    // Check if it's the player hitting the bounds
+                    if (body.gameObject === this.player) {
+                         console.log("Player hit world bounds");
+                         this.gameOver();
+                     }
+                 });
+            }
+
+            updatePlayerAngle(){
+                 if (!this.player || !this.player.body) return; // Guard clause
+                 // Rotate based on vertical velocity
+                 this.player.angle = Phaser.Math.Clamp(this.player.body.velocity.y * 0.1, -20, 30);
+            }
+
+            createAsteroid() {
+                if (this.gameOverFlag) return; // Don't spawn if game is over
+
+                const gap = 200; // Minimum vertical gap between asteroid pairs (if creating pairs)
+                const asteroidY = Phaser.Math.Between(50, this.scale.height - 50); // Random Y position
+
+                 // Create a single asteroid
+                 const asteroid = this.physics.add.sprite(this.scale.width + 50, asteroidY, 'asteroid');
+                 asteroid.setOrigin(0.5);
+                 asteroid.setScale(Phaser.Math.FloatBetween(0.6, 1.3)); // Vary size
+                 asteroid.setAngle(Phaser.Math.Between(0, 360)); // Random rotation
+                 asteroid.setVelocityX(-200 * this.gameSpeed); // Move left based on game speed
+                 asteroid.body.setAllowGravity(false); // Asteroids ignore gravity
+                 asteroid.setImmovable(true); // Player bounces off, asteroid doesn't move from collision
+                 this.asteroids.push(asteroid);
+
+                 // Optional: Add angular velocity for spinning effect
+                 asteroid.setAngularVelocity(Phaser.Math.Between(-50, 50));
+
+                 // Add collision check between player and this specific asteroid
+                 this.physics.add.overlap(this.player, asteroid, this.gameOver, null, this);
+            }
+
+            // generateAsteroidPosition() removed as logic is now inside createAsteroid
+
+            moveAsteroids() {
+                 // Filter out asteroids that have gone off-screen
+                let remainingAsteroids = [];
+                this.asteroids.forEach(asteroid => {
+                    if (asteroid.x > -asteroid.width) { // Check if still visible or about to be
+                        remainingAsteroids.push(asteroid);
+                     } else {
+                         // console.log("Destroying asteroid"); // Debugging
+                        asteroid.destroy(); // Remove from scene and memory
+                    }
+                });
+                this.asteroids = remainingAsteroids; // Update array
+            }
+
+             // checkOutOfBounds is replaced by the worldbounds event handler in createPlayer
+
+            playerFlap() {
+                // Only flap if the game is active and player exists
+                 if (this.gameOverFlag || !this.player || !this.player.body) return;
+                this.player.setVelocityY(-200); // Apply upward velocity
+            }
+
+            // checkCollision is handled by physics.add.overlap in createAsteroid now
+
+            createExplosion(x, y){
+                 // Use a sprite for the animation
+                 this.explosion = this.add.sprite(x, y, 'explosion_frame_0'); // Start with first frame
+                 this.explosion.setOrigin(0.5);
+                 this.explosion.setScale(1.5); // Adjust scale as needed
+                 this.explosion.play('explode'); // Play the predefined animation
+
+                 // The 'hideOnComplete' property in the animation definition handles hiding it.
+                 // Optional: Destroy the sprite after animation if 'hideOnComplete' isn't used or if you need cleanup
+                 // this.explosion.on('animationcomplete', () => {
+                 //     if (this.explosion) {
+                 //          this.explosion.destroy();
+                 //          this.explosion = null;
+                 //     }
+                 // });
+            }
+
+            updateScore() {
+                if (this.gameOverFlag) return;
+                this.score += 1;
+                this.scoreText.setText('Score: ' + this.score);
+            }
+
+            displayScore() {
+                this.scoreText = this.add.text(16, 16, 'Score: 0', {
+                    fontSize: '32px',
+                    fill: '#FFFFFF', // White color
+                    fontStyle: 'bold'
+                 }).setScrollFactor(0); // Make score stay in place
+            }
+
+            gameOver(player, gameObjectHit) { // Can accept arguments from overlap callback
+                if (this.gameOverFlag) return; // Prevent running multiple times
+
+                console.log("Game Over triggered");
+                this.gameOverFlag = true;
+                this.physics.pause(); // Pause all physics updates
+
+                // Stop player movement immediately and disable gravity
+                if (this.player && this.player.body) {
+                     this.player.setVelocity(0, 0); // Stop horizontal and vertical movement
+                     this.player.body.setAllowGravity(false); // Stop gravity acting on it
+                     this.player.setTint(0xff0000); // Visual feedback: turn red
+                     this.createExplosion(this.player.x, this.player.y); // Show explosion
+                     this.player.setVisible(false); // Hide the player sprite after explosion starts
+                }
+
+                // Stop asteroid timer
+                if (this.asteroidTimer) {
+                    this.asteroidTimer.remove();
+                    this.asteroidTimer = null; // Clear the reference
+                }
+
+                 // Stop existing asteroids from moving
+                 this.asteroids.forEach(asteroid => {
+                     if (asteroid && asteroid.body) {
+                         asteroid.setVelocityX(0);
+                         asteroid.setAngularVelocity(0); // Stop spinning
+                     }
+                 });
+
+                 // Remove input listeners immediately to prevent flapping after death
+                 this.input.off('pointerdown', this.playerFlap, this);
+                 this.input.keyboard.off('keydown-SPACE', this.playerFlap, this);
+
+
+                // Add Game Over Text
+                this.add.text(this.scale.width / 2, this.scale.height / 2 - 50, 'GAME OVER', {
+                     fontSize: '64px', fill: '#ff0000', fontStyle: 'bold'
+                 }).setOrigin(0.5);
+                this.add.text(this.scale.width / 2, this.scale.height / 2 + 10, `Final Score: ${this.score}`, {
+                     fontSize: '32px', fill: '#ffffff'
+                 }).setOrigin(0.5);
+                 this.add.text(this.scale.width / 2, this.scale.height / 2 + 60, 'Restarting...', {
+                     fontSize: '24px', fill: '#ffffff'
+                 }).setOrigin(0.5);
+
+
+                // Schedule the restart after a delay
+                this.time.delayedCall(3000, this.restartGame, [], this); // 3 second delay
+            }
+
+            restartGame() {
+                 console.log("Restarting scene...");
+                 // Reset specific properties if needed (though init should handle most)
+                 // e.g., ensure physics isn't paused globally if that affects other scenes.
+                 // this.physics.resume(); // Create handles resuming for this scene
+
+                 // Use scene plugin's restart method - this will call init -> preload -> create
+                this.scene.restart();
+            }
+
+            increaseDifficulty() {
+                if (this.gameOverFlag) return; // Don't increase difficulty after game over
+
+                // Increase speed based on score thresholds
+                 if (this.score > 3000 && this.gameSpeed < 2) {
+                     this.gameSpeed = 2;
+                 } else if (this.score > 2000 && this.gameSpeed < 1.75) {
+                     this.gameSpeed = 1.75;
+                 } else if (this.score > 1000 && this.gameSpeed < 1.5) {
+                    this.gameSpeed = 1.5;
+                 } else if (this.score > 500 && this.gameSpeed < 1.25) {
+                    this.gameSpeed = 1.25;
+                 }
+
+                 // Decrease spawn delay based on score, making asteroids appear faster
+                 // Make the decrease smaller as it gets faster
+                 let spawnRateDecrease = 0;
+                 if (this.score % 50 === 0 && this.asteroidSpawnRate > 600) { // Decrease every 50 points
+                     if (this.asteroidSpawnRate > 1000) {
+                         spawnRateDecrease = 5;
+                     } else {
+                         spawnRateDecrease = 2;
+                     }
+                     this.asteroidSpawnRate = Math.max(600, this.asteroidSpawnRate - spawnRateDecrease); // Ensure minimum spawn rate
+                     // Update the timer with the new delay
+                     if(this.asteroidTimer) {
+                         this.asteroidTimer.delay = this.asteroidSpawnRate;
+                         // console.log("New spawn rate:", this.asteroidSpawnRate); // Debugging
+                     }
+                 }
+            }
+
+            // pauseGame() and resumeGame() could be implemented if needed for a pause button
+            // pauseGame() {
+            //     if (this.gameOverFlag) return;
+            //     this.physics.pause();
+            //     if(this.asteroidTimer) this.asteroidTimer.paused = true;
+            //     // Show pause menu/text
+            // }
+
+            // resumeGame() {
+            //     if (this.gameOverFlag) return;
+            //     this.physics.resume();
+            //     if(this.asteroidTimer) this.asteroidTimer.paused = false;
+            //     // Hide pause menu/text
+            // }
+
+            update(time, delta) {
+                if (this.gameOverFlag) return; // Stop updates if game is over
+
+                this.moveStarfield();
+                this.moveAsteroids(); // Handles moving and destroying off-screen asteroids
+                // Collision checking is now handled by physics overlap callbacks set in createAsteroid
+                this.updateScore();
+                this.increaseDifficulty();
+                this.updatePlayerAngle();
+                // Check out of bounds is handled by physics world bounds event
+            }
+        }
+
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 0 }, // Global gravity (player has its own)
+                     debug: false // Set to true for collision box visualization
+                }
+            },
+            scene: [BootScene, GameScene],
+            title: 'Cosmic Flap', // Metadata
+            // These custom config keys are not used by Phaser but can be useful for info
+             instructions: 'Tap/Spacebar to ascend. Avoid asteroids.',
+             genre: 'Endless Runner',
+             required_assets: ['spaceship sprite', 'asteroid sprite', 'starfield background', 'explosion animation'],
+             description: 'A space-themed endless runner where you control a spaceship, flapping through obstacles in the vastness of space.'
+        };
+
+        const game = new Phaser.Game(config);
         </script>
     </body>
-    </html>
-    
+</html>

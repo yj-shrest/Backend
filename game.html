@@ -1,197 +1,564 @@
 <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Space Shooter</title>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js"></script>
-        <style>
-            body {
-                margin: 0;
-                padding: 0;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                background-color: #000;
-            }
-            canvas {
-                display: block;
-            }
-        </style>
-    </head>
-    <body>
-        <script>
-        class BootScene extends Phaser.Scene {
-    constructor() {
-        super('Boot');
-    }
-
-    preload() {
-        // Display loading text
-        this.add.text(
-            this.cameras.main.width / 2,
-            this.cameras.main.height / 2,
-            'Loading game...',
-            { font: '24px Arial', fill: '#ffffff' }
-        ).setOrigin(0.5);
-
-        // Generate all textures programmatically
-        this.generateTextures();
-    }
-
-    generateTextures() {
-        this.generateBackgroundTexture();
-        this.generatePaddleTexture();
-        this.generateBallTexture();
-        this.generateTableTexture();
-    }
-    generateBackgroundTexture() {
-        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
-        graphics.fillStyle(0x000000);
-        graphics.fillRect(0, 0, 800, 600);
-
-        graphics.generateTexture('background', 800, 600);
-    }
-
-    generatePaddleTexture() {
-        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
-        graphics.fillStyle(0xffffff);
-        graphics.fillRect(0, 0, 20, 100);
-        graphics.generateTexture('paddle', 20, 100);
-    }
-
-    generateBallTexture() {
-        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
-        graphics.fillStyle(0xffffff);
-        graphics.fillCircle(10, 10, 10);
-        graphics.generateTexture('ball', 20, 20);
-    }
-
-    generateTableTexture() {
-        const graphics = this.make.graphics({ x: 0, y: 0, add: false });
-        graphics.fillStyle(0x008000);
-        graphics.fillRect(0, 0, 800, 20);
-        graphics.generateTexture('table', 800, 20);
-    }
-
-    create() {
-        this.scene.start('GameScene');
-    }
-}
-        class GameScene extends Phaser.Scene {
-constructor() {
-    super({ key: 'GameScene' });
-    this.config = {};
-}
-init(config) {
-    this.config = config;
-}
-create() {
-    this.add.image(400, 300, 'background');
-    this.playerPaddle = this.physics.add.sprite(50, 300, 'paddle');
-    this.aiPaddle = this.physics.add.sprite(750, 300, 'paddle');
-    this.ball = this.physics.add.sprite(400, 300, 'ball');
-    this.table = this.add.image(400,300, 'table');
-
-    this.playerScore = 0;
-    this.aiScore = 0;
-
-    this.playerScoreText = this.add.text(10, 10, '0', { fontSize: '32px', fill: '#000' });
-    this.aiScoreText = this.add.text(750, 10, '0', { fontSize: '32px', fill: '#000' });
-
-    this.cursors = this.input.keyboard.createCursorKeys();
-
-    this.physics.add.collider(this.playerPaddle, this.ball, this.handlePaddleBallCollision, null, this);
-    this.physics.add.collider(this.aiPaddle, this.ball, this.handlePaddleBallCollision, null, this);
-
-    this.ball.setVelocity(200, 200);   
-}
-
-movePlayerPaddle() {
-    if (this.cursors.up.isDown) {
-        this.playerPaddle.y -= 10;
-    } else if (this.cursors.down.isDown) {
-        this.playerPaddle.y += 10;
-    }
-}
-
-moveAIPaddle() {
-    if (this.ball.y < this.aiPaddle.y) {
-        this.aiPaddle.y -= 5;
-    } else if (this.ball.y > this.aiPaddle.y) {
-        this.aiPaddle.y += 5;
-    }
-}
-
-updateBallPosition() { 
-  if (this.ball.x < 0 || this.ball.x > 800) {        this.resetBall();    }
-    if (this.ball.y < 0 || this.ball.y > 600) {
-        this.ball.setVelocity(this.ball.body.velocity.x, -this.ball.body.velocity.y);
-    }
-}
-
-handlePaddleBallCollision(paddle, ball) {    ball.setVelocity(-ball.body.velocity.x * 1.05, ball.body.velocity.y * 1.05);}
-
-updateScore(playerScored) {
-    if (playerScored) {
-        this.playerScore++;
-        this.playerScoreText.setText(this.playerScore);
-    } else {
-        this.aiScore++;
-        this.aiScoreText.setText(this.aiScore);
-    }
-}
-
-checkWinCondition() {
-    if (this.playerScore >= 10) {
-        this.endGame(true);
-    } else if (this.aiScore >= 10) {
-        this.endGame(false);
-    }
-}
-resetBall() {
-    this.ball.setPosition(400, 300);
-    const direction = Math.random() < 0.5 ? -1 : 1;
-    this.ball.setVelocity(200 * direction, 200);
-    if(this.ball.x < 0) { this.updateScore(false); } 
-        else { this.updateScore(true); }
-}
-
-adjustBallSpeed(factor) {
-    this.ball.setVelocity(this.ball.body.velocity.x * factor, this.ball.body.velocity.y * factor);
-}
-
-displayScore() {
-    // Score is already displayed, this function can update position if needed.
-}
-startGame() {}
-pauseGame() {}
-resumeGame() {}
-endGame(playerWon) {
-    if (playerWon) {
-      this.add.text(200, 200, 'You Won!', { fontSize: '64px', fill: '#000'});
-    } else {
-        this.add.text(200, 200, 'You Lost!', { fontSize: '64px', fill: '#000'});
-    }
-    this.scene.pause();     
-}
-update() {
-    this.movePlayerPaddle();
-    this.moveAIPaddle();
-    this.updateBallPosition();
-    this.checkWinCondition();
-}
-}
-        const game = new Phaser.Game({
-    type: Phaser.AUTO,
-    width: 800,
-    height: 600,
-    scene: [BootScene, GameScene],  // Include BootScene
-    physics: {
-        default: 'arcade',
-        arcade: {
-            gravity: { y: 0 }
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mouse Mayhem</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #333;
         }
-    }
-});
+        canvas {
+            border: 2px solid #555;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 300 },
+                    debug: false
+                }
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        
+        // Game variables
+        let player;
+        let platforms;
+        let apples;
+        let cats;
+        let dogs;
+        let cursors;
+        let score = 0;
+        let scoreText;
+        let lives = 3;
+        let livesText;
+        let gameOverText;
+        let levelCompleteText;
+        let powerUpActive = false;
+        let powerUpTimer;
+        let finishLine;
+        let gameOver = false;
+
+        function preload() {
+            // No need to preload assets as we're drawing everything
+        }
+
+        function create() {
+            // Create a gradient background
+            const bg = this.add.graphics();
+            bg.fillGradientStyle(0x87CEEB, 0x87CEEB, 0x4682B4, 0x4682B4, 1);
+            bg.fillRect(0, 0, 800, 600);
+            
+            // Add some clouds for decoration
+            for (let i = 0; i < 5; i++) {
+                const cloud = this.add.graphics();
+                cloud.fillStyle(0xFFFFFF, 0.8);
+                const x = Phaser.Math.Between(50, 750);
+                const y = Phaser.Math.Between(50, 200);
+                const size = Phaser.Math.Between(20, 40);
+                cloud.fillCircle(x, y, size);
+                cloud.fillCircle(x + size, y, size * 0.8);
+                cloud.fillCircle(x - size, y, size * 0.8);
+            }
+
+            // Create platforms group
+            platforms = this.physics.add.staticGroup();
+            
+            // Create ground and some cheese platforms
+            createCheesePlatform(this, 0, 550, 400, 50); // Ground left
+            createCheesePlatform(this, 500, 550, 400, 50); // Ground right
+            createCheesePlatform(this, 200, 450, 150, 30);
+            createCheesePlatform(this, 500, 400, 100, 30);
+            createCheesePlatform(this, 0, 350, 150, 30);
+            createCheesePlatform(this, 300, 300, 100, 30);
+            createCheesePlatform(this, 600, 250, 200, 30);
+            createCheesePlatform(this, 100, 200, 100, 30);
+            
+            // Create finish line
+            finishLine = this.physics.add.sprite(750, 200, 'finish');
+            finishLine.body.allowGravity = false;
+            finishLine.setImmovable(true);
+            
+            // Draw the finish line
+            const flag = this.add.graphics();
+            flag.fillStyle(0x00FF00, 1);
+            flag.fillRect(finishLine.x - 10, finishLine.y - 50, 10, 100);
+            flag.fillStyle(0xFF0000, 1);
+            flag.fillTriangle(
+                finishLine.x, finishLine.y - 50,
+                finishLine.x + 30, finishLine.y - 30,
+                finishLine.x, finishLine.y - 10
+            );
+            
+            // Create player (mouse)
+            player = this.physics.add.sprite(100, 450, 'player');
+            player.body.setSize(30, 30);
+            player.setBounce(0.2);
+            player.setCollideWorldBounds(true);
+            
+            // Draw the mouse character
+            drawMouse(this, player);
+            
+            // Create apples group
+            apples = this.physics.add.group();
+            
+            // Add some apples
+            for (let i = 0; i < 10; i++) {
+                const x = Phaser.Math.Between(50, 750);
+                const y = Phaser.Math.Between(50, 500);
+                const apple = apples.create(x, y, 'apple');
+                apple.setBounce(0.4);
+                apple.setCollideWorldBounds(true);
+                
+                // Draw the apple
+                drawApple(this, apple);
+            }
+            
+            // Create enemies
+            cats = this.physics.add.group();
+            dogs = this.physics.add.group();
+            
+            // Add cats
+            createCat(this, 300, 520);
+            createCat(this, 600, 520);
+            
+            // Add dogs
+            createDog(this, 200, 400);
+            createDog(this, 500, 350);
+            
+            // Set up controls
+            cursors = this.input.keyboard.createCursorKeys();
+            
+            // Set up collisions
+            this.physics.add.collider(player, platforms);
+            this.physics.add.collider(apples, platforms);
+            this.physics.add.collider(cats, platforms);
+            this.physics.add.collider(dogs, platforms);
+            
+            // Set up overlaps
+            this.physics.add.overlap(player, apples, collectApple, null, this);
+            this.physics.add.overlap(player, cats, hitEnemy, null, this);
+            this.physics.add.overlap(player, dogs, hitEnemy, null, this);
+            this.physics.add.overlap(player, finishLine, completeLevel, null, this);
+            
+            // Create UI
+            scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '24px', fill: '#fff' });
+            livesText = this.add.text(680, 16, 'Lives: 3', { fontSize: '24px', fill: '#fff' });
+            gameOverText = this.add.text(400, 300, 'GAME OVER', { 
+                fontSize: '64px', 
+                fill: '#ff0000',
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
+            gameOverText.setVisible(false);
+            
+            levelCompleteText = this.add.text(400, 300, 'LEVEL COMPLETE!', { 
+                fontSize: '48px', 
+                fill: '#00ff00',
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
+            levelCompleteText.setVisible(false);
+            
+            // Add instructions
+            this.add.text(400, 570, 'Arrow keys to move, Spacebar to jump', {
+                fontSize: '16px',
+                fill: '#fff'
+            }).setOrigin(0.5);
+            
+            // Set up enemy movement
+            this.time.addEvent({
+                delay: 2000,
+                callback: moveEnemies,
+                callbackScope: this,
+                loop: true
+            });
+        }
+
+        function update() {
+            if (gameOver) {
+                return;
+            }
+            
+            // Player controls
+            if (cursors.left.isDown) {
+                const speedMultiplier = powerUpActive ? 2 : 1;
+                player.setVelocityX(-160 * speedMultiplier);
+                // Flip the mouse graphics to face left
+                if (player.mouseGraphics) {
+                    player.mouseGraphics.setVisible(false);
+                    if (!player.mouseGraphicsLeft) {
+                        player.mouseGraphicsLeft = drawMouse(this, player, true);
+                    } else {
+                        player.mouseGraphicsLeft.setVisible(true);
+                    }
+                }
+            } else if (cursors.right.isDown) {
+                const speedMultiplier = powerUpActive ? 2 : 1;
+                player.setVelocityX(160 * speedMultiplier);
+                // Flip the mouse graphics to face right
+                if (player.mouseGraphicsLeft) {
+                    player.mouseGraphicsLeft.setVisible(false);
+                    if (!player.mouseGraphics) {
+                        player.mouseGraphics = drawMouse(this, player, false);
+                    } else {
+                        player.mouseGraphics.setVisible(true);
+                    }
+                }
+            } else {
+                player.setVelocityX(0);
+            }
+            
+            if (cursors.space.isDown && player.body.touching.down) {
+                player.setVelocityY(-330);
+            }
+            
+            // Update the position of graphics for the player
+            if (player.mouseGraphics) {
+                player.mouseGraphics.x = player.x;
+                player.mouseGraphics.y = player.y;
+            }
+            if (player.mouseGraphicsLeft) {
+                player.mouseGraphicsLeft.x = player.x;
+                player.mouseGraphicsLeft.y = player.y;
+            }
+            
+            // Check if player fell off the bottom of the screen
+            if (player.y > 580) {
+                loseLife.call(this);
+                resetPlayerPosition();
+            }
+        }
+        
+        function resetPlayerPosition() {
+            player.setPosition(100, 450);
+            player.setVelocity(0, 0);
+        }
+        
+        function createCheesePlatform(scene, x, y, width, height) {
+            const platform = platforms.create(x + width / 2, y + height / 2, 'platform');
+            platform.displayWidth = width;
+            platform.displayHeight = height;
+            platform.refreshBody();
+            
+            // Draw cheese platform
+            const graphics = scene.add.graphics();
+            graphics.fillStyle(0xF4D03F, 1); // Cheese color
+            graphics.fillRect(x, y, width, height);
+            
+            // Add cheese holes
+            graphics.fillStyle(0xF7DC6F, 0.8);
+            for (let i = 0; i < width / 20; i++) {
+                const holeX = x + Phaser.Math.Between(10, width - 10);
+                const holeY = y + Phaser.Math.Between(5, height - 5);
+                const holeSize = Phaser.Math.Between(3, 6);
+                graphics.fillCircle(holeX, holeY, holeSize);
+            }
+        }
+        
+        function drawMouse(scene, sprite, facingLeft = false) {
+            const container = scene.add.container(sprite.x, sprite.y);
+            
+            // Mouse body
+            const body = scene.add.graphics();
+            body.fillStyle(0x808080, 1); // Gray color
+            body.fillEllipse(0, 0, 30, 20);
+            
+            // Mouse head
+            const head = scene.add.graphics();
+            head.fillStyle(0x808080, 1);
+            
+            // Adjust for direction
+            const directionMod = facingLeft ? -1 : 1;
+            
+            head.fillEllipse(directionMod * 15, -5, 15, 12);
+            
+            // Mouse ears
+            const ears = scene.add.graphics();
+            ears.fillStyle(0x808080, 1);
+            ears.fillCircle(directionMod * 15, -13, 6);
+            ears.fillCircle(directionMod * 20, -13, 6);
+            
+            // Mouse eyes
+            const eyes = scene.add.graphics();
+            eyes.fillStyle(0x000000, 1);
+            eyes.fillCircle(directionMod * 20, -7, 2);
+            
+            // Mouse tail
+            const tail = scene.add.graphics();
+            tail.lineStyle(3, 0x808080, 1);
+            tail.beginPath();
+            tail.moveTo(directionMod * -15, 0);
+            tail.lineTo(directionMod * -30, -10);
+            tail.stroke();
+            
+            container.add([body, head, ears, eyes, tail]);
+            
+            if (powerUpActive) {
+                // Add glow for power-up
+                const glow = scene.add.graphics();
+                glow.lineStyle(3, 0xFFFF00, 0.8);
+                glow.strokeCircle(0, 0, 25);
+                container.add(glow);
+            }
+            
+            return container;
+        }
+        
+        function drawApple(scene, sprite) {
+            const graphics = scene.add.graphics();
+            graphics.fillStyle(0xFF0000, 1); // Red color
+            graphics.fillCircle(sprite.x, sprite.y, 8);
+            
+            // Apple stem
+            graphics.fillStyle(0x654321, 1); // Brown color
+            graphics.fillRect(sprite.x - 1, sprite.y - 10, 2, 5);
+            
+            // Apple leaf
+            graphics.fillStyle(0x00FF00, 1); // Green color
+            graphics.fillTriangle(
+                sprite.x, sprite.y - 10,
+                sprite.x + 5, sprite.y - 15,
+                sprite.x + 2, sprite.y - 8
+            );
+        }
+        
+        function createCat(scene, x, y) {
+            const cat = cats.create(x, y, 'cat');
+            cat.setBounce(0.2);
+            cat.setCollideWorldBounds(true);
+            cat.setVelocity(Phaser.Math.Between(-50, 50), 0);
+            
+            // Draw cat
+            const graphics = scene.add.graphics();
+            
+            // Cat body
+            graphics.fillStyle(0xF08080, 1); // Light coral color
+            graphics.fillEllipse(x, y, 40, 20);
+            
+            // Cat head
+            graphics.fillCircle(x, y - 15, 15);
+            
+            // Cat ears
+            graphics.fillTriangle(
+                x - 10, y - 25,
+                x - 5, y - 35,
+                x, y - 25
+            );
+            graphics.fillTriangle(
+                x + 10, y - 25,
+                x + 5, y - 35,
+                x, y - 25
+            );
+            
+            // Cat eyes
+            graphics.fillStyle(0x000000, 1);
+            graphics.fillCircle(x - 5, y - 17, 2);
+            graphics.fillCircle(x + 5, y - 17, 2);
+            
+            // Cat tail
+            graphics.lineStyle(3, 0xF08080, 1);
+            graphics.beginPath();
+            graphics.moveTo(x - 20, y);
+            graphics.lineTo(x - 35, y - 10);
+            graphics.stroke();
+            
+            // Store the graphics object with the cat
+            cat.catGraphics = graphics;
+            
+            return cat;
+        }
+        
+        function createDog(scene, x, y) {
+            const dog = dogs.create(x, y, 'dog');
+            dog.setBounce(0.2);
+            dog.setCollideWorldBounds(true);
+            dog.setVelocity(Phaser.Math.Between(-40, 40), 0);
+            
+            // Draw dog
+            const graphics = scene.add.graphics();
+            
+            // Dog body
+            graphics.fillStyle(0xA0522D, 1); // Brown color
+            graphics.fillEllipse(x, y, 50, 25);
+            
+            // Dog head
+            graphics.fillCircle(x + 20, y - 10, 20);
+            
+            // Dog ears
+            graphics.fillEllipse(x + 10, y - 25, 10, 15);
+            graphics.fillEllipse(x + 30, y - 25, 10, 15);
+            
+            // Dog eyes
+            graphics.fillStyle(0x000000, 1);
+            graphics.fillCircle(x + 15, y - 12, 3);
+            
+            // Dog nose
+            graphics.fillCircle(x + 35, y - 10, 5);
+            
+            // Dog tail
+            graphics.fillStyle(0xA0522D, 1);
+            graphics.fillEllipse(x - 35, y, 15, 8);
+            
+            // Store the graphics object with the dog
+            dog.dogGraphics = graphics;
+            
+            return dog;
+        }
+        
+        function moveEnemies() {
+            if (gameOver) return;
+            
+            cats.getChildren().forEach(cat => {
+                cat.setVelocityX(Phaser.Math.Between(-100, 100));
+                // Update cat graphics position
+                if (cat.catGraphics) {
+                    cat.catGraphics.x = cat.x;
+                    cat.catGraphics.y = cat.y;
+                }
+            });
+            
+            dogs.getChildren().forEach(dog => {
+                dog.setVelocityX(Phaser.Math.Between(-80, 80));
+                // Update dog graphics position
+                if (dog.dogGraphics) {
+                    dog.dogGraphics.x = dog.x;
+                    dog.dogGraphics.y = dog.y;
+                }
+            });
+        }
+        
+        function collectApple(player, apple) {
+            apple.disableBody(true, true);
+            
+            // Increase score
+            score += 10;
+            scoreText.setText('Score: ' + score);
+            
+            // Activate power-up
+            activatePowerUp.call(this);
+            
+            // Check if all apples are collected
+            if (apples.countActive(true) === 0) {
+                // Respawn some apples
+                for (let i = 0; i < 5; i++) {
+                    const x = Phaser.Math.Between(50, 750);
+                    const y = Phaser.Math.Between(50, 500);
+                    const apple = apples.create(x, y, 'apple');
+                    apple.setBounce(0.4);
+                    apple.setCollideWorldBounds(true);
+                    drawApple(this, apple);
+                }
+            }
+        }
+        
+        function activatePowerUp() {
+            powerUpActive = true;
+            
+            // Update player appearance
+            if (player.mouseGraphics) {
+                player.mouseGraphics.destroy();
+                player.mouseGraphics = drawMouse(this, player, false);
+            }
+            if (player.mouseGraphicsLeft) {
+                player.mouseGraphicsLeft.destroy();
+                player.mouseGraphicsLeft = drawMouse(this, player, true);
+            }
+            
+            // Clear existing timer if there is one
+            if (powerUpTimer) {
+                this.time.removeEvent(powerUpTimer);
+            }
+            
+            // Set timer for power-up duration
+            powerUpTimer = this.time.delayedCall(5000, function() {
+                powerUpActive = false;
+                // Update player appearance
+                if (player.mouseGraphics) {
+                    player.mouseGraphics.destroy();
+                    player.mouseGraphics = drawMouse(this, player, false);
+                }
+                if (player.mouseGraphicsLeft) {
+                    player.mouseGraphicsLeft.destroy();
+                    player.mouseGraphicsLeft = drawMouse(this, player, true);
+                }
+            }, [], this);
+        }
+        
+        function hitEnemy(player, enemy) {
+            if (powerUpActive) {
+                // If power-up is active, destroy the enemy instead
+                enemy.disableBody(true, true);
+                score += 50;
+                scoreText.setText('Score: ' + score);
+                return;
+            }
+            
+            loseLife.call(this);
+            resetPlayerPosition();
+        }
+        
+        function loseLife() {
+            lives--;
+            livesText.setText('Lives: ' + lives);
+            
+            if (lives <= 0) {
+                this.physics.pause();
+                gameOver = true;
+                gameOverText.setVisible(true);
+                
+                // Add restart instruction
+                this.add.text(400, 380, 'Press R to restart', {
+                    fontSize: '24px',
+                    fill: '#ffffff'
+                }).setOrigin(0.5);
+                
+                // Add key listener for restart
+                this.input.keyboard.once('keydown-R', function() {
+                    this.scene.restart();
+                    lives = 3;
+                    score = 0;
+                    gameOver = false;
+                }, this);
+            }
+        }
+        
+        function completeLevel(player, finishLine) {
+            this.physics.pause();
+            levelCompleteText.setVisible(true);
+            
+            // Add next level instruction
+            this.add.text(400, 380, 'Press N for next level', {
+                fontSize: '24px',
+                fill: '#ffffff'
+            }).setOrigin(0.5);
+            
+            // Add key listener for next level
+            this.input.keyboard.once('keydown-N', function() {
+                this.scene.restart();
+                score += 100;
+                gameOver = false;
+            }, this);
+        }
+    </script>
+</body>
+</html>
