@@ -20,7 +20,8 @@ This is a Flask-based backend service for generating, updating, and managing HTM
 
 - **Flask** (Python web framework)
 - **Pydantic** (for request/response schema validation)
-- **Google Gemini API** (natural language to structured JSON / game code)
+- **Google Gemini API** (natural language to structured JSON )
+- **Claude API**(json to game code) 
 - **Blockchain Blob Storage** (for decentralized storage)
 - **OpenCV + HTML rendering** (for game screenshots)
 
