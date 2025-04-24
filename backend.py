@@ -7,6 +7,8 @@ from gameCreator import create_game
 app = flask.Flask(__name__)
 flask_cors.CORS(app)
 
+API = "YOUR_API_KEY_HERE"
+
 class responseBase(BaseModel):
     title: str
     description: str
@@ -21,7 +23,7 @@ class GameBase(BaseModel):
 def create_json():
     data = request.get_json()
     prompt = data['prompt']
-    client = genai.Client(api_key="AIzaSyAFSjqpFOK2aG1jilF5RciOpjNbQYNi4cE")
+    client = genai.Client(api_key=API)
     query = f"""You are a game design assistant. The user will give you a short description of a game idea in natural language.
             Your task is to generate a structured JSON object that represents this game concept. Not a level based game until specified. 
             Do not add music or sound assets to the game.
@@ -49,7 +51,7 @@ def update_game():
     data = request.get_json()
     feedback = data["feedbackPrompt"]
     html = data["gameHtml"]
-    client = genai.Client(api_key="AIzaSyAFSjqpFOK2aG1jilF5RciOpjNbQYNi4cE")
+    client = genai.Client(api_key=API)
     query = f"""update the game code with the following feedback: {feedback}. The game code is {html}."""
     response = client.models.generate_content(
         model="gemini-2.0-flash",
